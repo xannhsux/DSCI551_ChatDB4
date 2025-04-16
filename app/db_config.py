@@ -1,9 +1,18 @@
 import os
+from sqlalchemy import create_engine
 
-MONGO_URI = "mongodb+srv://flightsdata:dsci551@flightsdata.y57hp.mongodb.net/?retryWrites=true&w=majority"
+# MongoDB Configuration
+MONGO_URI = os.environ.get("MONGO_URI", "mongodb+srv://flightsdata:dsci551@flightsdata.y57hp.mongodb.net/?retryWrites=true&w=majority")
+MONGO_DB = "flights"
+MONGO_COLLECTION = "DSCI551_Project"
 
-MONGO_DB = "flights"    # 例如：如果在 Compass 显示是 “DSCI551_Project”
-MONGO_COLLECTION = "DSCI551_Project"    # 如果 MongoDB 中集合名称是 flights
+# MongoDB local connection (as fallback)
+MONGO_HOST = os.environ.get("MONGO_HOST", "mongodb")
+MONGO_PORT = os.environ.get("MONGO_PORT", "27017")
+LOCAL_MONGO_URI = f"mongodb://{MONGO_HOST}:{MONGO_PORT}"
 
-# SQLite 数据库路径，这里使用容器内部的路径（和 Dockerfile 中复制的路径保持一致）
-SQLITE_DB_PATH = os.path.join(os.getcwd(), "hotel.db")
+# SQLite Configuration
+SQLITE_DB_PATH = os.environ.get("SQLITE_DB_PATH", os.path.join(os.getcwd(), "hotel.db"))
+
+# Create SQLAlchemy engine for Gradio app
+sql_engine = create_engine(f"sqlite:///{SQLITE_DB_PATH}")

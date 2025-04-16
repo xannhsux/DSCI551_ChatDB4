@@ -1,54 +1,146 @@
-from flask import Flask, jsonify, request
-from mongo_agent import get_all_flights, get_flights_by_airports, get_flights_by_airline
-from sql_agent import get_all_reviews, get_reviews_by_county, insert_review
+from fastapi import FastAPI, Query, HTTPException
+from typing import List, Dict, Any, Optional
+import os
 
-app = Flask(__name__)
+from .mongo_agent import get_all_flights, get_flights_by_airports, get_flights_by_airline
+from .sql_agent import get_all_reviews, get_reviews_by_county, get_reviews_by_state
 
-# === MongoDB 接口部分 (保持不变) ===
-@app.route("/flights", methods=["GET"])
-def all_flights():
-    return jsonify(get_all_flights())
+app = FastAPI(title="Travel Database API")
 
-@app.route("/flights/route", methods=["GET"])
-def flights_by_route():
-    starting = request.args.get("from")
-    destination = request.args.get("to")
-    return jsonify(get_flights_by_airports(starting, destination))
+@app.get("/")
+def read_root():
+    return {"message": "Welcome to the Travel Database API"}
 
-@app.route("/flights/airline/<airline>", methods=["GET"])
-def flights_by_airline(airline):
-    return jsonify(get_flights_by_airline(airline))
+# Flight endpoints
+@app.get("/flights", response_model=List[Dict[str, Any]])
+def get_flights():
+    """
+    Get all flights from the MongoDB database
+    """
+    try:
+        flights = get_all_flights()
+        return flights
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error retrieving flights: {str(e)}")
 
-# === SQLite 接口部分 (hotel_reviews 表) ===
-# 获取所有酒店评价记录
-@app.route("/hotelreviews", methods=["GET"])
-def all_hotel_reviews():
-    reviews = get_all_reviews()
-    return jsonify(reviews)
+@app.get("/flights/airports", response_model=List[Dict[str, Any]])
+def get_flights_by_airport(
+    starting: str = Query(..., description="Starting airport code"),
+    destination: str = Query(..., description="Destination airport code")
+):
+    """
+    Get flights between specific airports
+    """
+    try:
+        flights = get_flights_by_airports(starting, destination)
+        return flights
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error retrieving flights: {str(e)}")
 
-# 根据 county 查询酒店评价记录
-@app.route("/hotelreviews/county", methods=["GET"])
-def hotel_reviews_by_county():
-    county = request.args.get("county")
-    reviews = get_reviews_by_county(county)
-    return jsonify(reviews)
+@app.get("/flights/airline", response_model=List[Dict[str, Any]])
+def get_flights_by_airline_name(
+    airline: str = Query(..., description="Airline name")
+):
+    """
+    Get flights operated by a specific airline
+    """
+    try:
+        flights = get_flights_by_airline(airline)
+        return flights
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error retrieving flights: {str(e)}")
 
-# 插入新的酒店评价记录（POST）
-@app.route("/hotelreviews", methods=["POST"])
-def add_hotel_review():
-    data = request.get_json()
-    # 根据你的 sql_agent.py 函数定义，这里需要传入 9 个字段：
-    rating = data.get("rating")
-    sleepquality = data.get("sleepquality")
-    service = data.get("service")
-    rooms = data.get("rooms")
-    cleanliness = data.get("cleanliness")
-    value = data.get("value")
-    hotel_name = data.get("hotel_name")
-    county = data.get("county")
-    state = data.get("state")
-    new_id = insert_review(rating, sleepquality, service, rooms, cleanliness, value, hotel_name, county, state)
-    return jsonify({"new_id": new_id})
+# Hotel endpoints
+@app.get("/hotels", response_model=List[Dict[str, Any]])
+def get_hotels(
+    county: Optional[str] = None,
+    state: Optional[str] = None
+):
+    """
+    Get hotel reviews with optional county and state filters
+    """
+    try:
+        if county and state:
+            # Filter by both county and state
+            # Since there's no direct function for this, we'll get by county and filter in Python
+            hotels = get_reviews_by_county(county)
+            hotels = [hotel for hotel in hotels if hotel[8] == state]  # Assuming state is at index 8
+        elif county:
+            hotels = get_reviews_by_county(county)
+        elif state:
+            hotels = get_reviews_by_state(state)
+        else:
+            hotels = get_all_reviews()
+        
+        # Convert tuple data to dictionaries
+        result = []
+        for hotel in hotels:
+            result.append({
+                "rating": hotel[0],
+                "sleepquality": hotel[1],
+                "service": hotel[2],
+                "rooms": hotel[3],
+                "cleanliness": hotel[4],
+                "value": hotel[5],
+                "hotel_name": hotel[6],
+                "county": hotel[7],
+                "state": hotel[8]
+            })
+        
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error retrieving hotels: {str(e)}")
 
-if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=8100)
+@app.get("/hotels/county/{county}", response_model=List[Dict[str, Any]])
+def get_hotels_by_county(county: str):
+    """
+    Get hotel reviews for a specific county
+    """
+    try:
+        hotels = get_reviews_by_county(county)
+        
+        # Convert tuple data to dictionaries
+        result = []
+        for hotel in hotels:
+            result.append({
+                "rating": hotel[0],
+                "sleepquality": hotel[1],
+                "service": hotel[2],
+                "rooms": hotel[3],
+                "cleanliness": hotel[4],
+                "value": hotel[5],
+                "hotel_name": hotel[6],
+                "county": hotel[7],
+                "state": hotel[8]
+            })
+        
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error retrieving hotels: {str(e)}")
+
+@app.get("/hotels/state/{state}", response_model=List[Dict[str, Any]])
+def get_hotels_by_state(state: str):
+    """
+    Get hotel reviews for a specific state
+    """
+    try:
+        hotels = get_reviews_by_state(state)
+        
+        # Convert tuple data to dictionaries
+        result = []
+        for hotel in hotels:
+            result.append({
+                "rating": hotel[0],
+                "sleepquality": hotel[1],
+                "service": hotel[2],
+                "rooms": hotel[3],
+                "cleanliness": hotel[4],
+                "value": hotel[5],
+                "hotel_name": hotel[6],
+                "county": hotel[7],
+                "state": hotel[8]
+            })
+        
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error retrieving hotels: {str(e)}")
