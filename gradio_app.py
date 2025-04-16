@@ -6,9 +6,11 @@ import json
 
 # Get API URL from environment variables
 API_URL = os.environ.get("API_URL", "http://localhost:8000")
+OLLAMA_HOST = os.environ.get("OLLAMA_HOST", "http://localhost:11434")
 
 # Initialize Ollama client
-llm = Ollama(model="llama3")
+llm = Ollama(model="llama3", base_url=OLLAMA_HOST)
+
 
 def query_flights(query_type, param1="", param2=""):
     """
@@ -18,14 +20,14 @@ def query_flights(query_type, param1="", param2=""):
         if query_type == "all_flights":
             response = requests.get(f"{API_URL}/flights")
         elif query_type == "by_airports":
-            response = requests.get(f"{API_URL}/flights/airports", 
-                                  params={"starting": param1, "destination": param2})
+            response = requests.get(f"{API_URL}/flights/airports",
+                                    params={"starting": param1, "destination": param2})
         elif query_type == "by_airline":
-            response = requests.get(f"{API_URL}/flights/airline", 
-                                  params={"airline": param1})
+            response = requests.get(f"{API_URL}/flights/airline",
+                                    params={"airline": param1})
         else:
             return "Invalid query type"
-        
+
         if response.status_code == 200:
             flights = response.json()
             return format_flights(flights)
@@ -34,21 +36,23 @@ def query_flights(query_type, param1="", param2=""):
     except Exception as e:
         return f"Error connecting to API: {str(e)}"
 
+
 def format_flights(flights):
     """Format flight data for display"""
     if not flights:
         return "No flights found."
-    
+
     result = ""
     for i, flight in enumerate(flights):
-        result += f"Flight {i+1}:\n"
+        result += f"Flight {i + 1}:\n"
         result += f"  Starting Airport: {flight.get('startingAirport', 'N/A')}\n"
         result += f"  Destination Airport: {flight.get('destinationAirport', 'N/A')}\n"
         result += f"  Airline: {flight.get('segmentsAirlineName', 'N/A')}\n"
         result += f"  Price: ${flight.get('totalFare', 'N/A')}\n"
         result += f"  Duration: {flight.get('totalTripDuration', 'N/A')} minutes\n\n"
-    
+
     return result
+
 
 def query_hotels(county="", state=""):
     """
@@ -56,15 +60,15 @@ def query_hotels(county="", state=""):
     """
     try:
         if county and state:
-            response = requests.get(f"{API_URL}/hotels", 
-                                  params={"county": county, "state": state})
+            response = requests.get(f"{API_URL}/hotels",
+                                    params={"county": county, "state": state})
         elif county:
             response = requests.get(f"{API_URL}/hotels/county/{county}")
         elif state:
             response = requests.get(f"{API_URL}/hotels/state/{state}")
         else:
             response = requests.get(f"{API_URL}/hotels")
-        
+
         if response.status_code == 200:
             hotels = response.json()
             return format_hotels(hotels)
@@ -73,21 +77,23 @@ def query_hotels(county="", state=""):
     except Exception as e:
         return f"Error connecting to API: {str(e)}"
 
+
 def format_hotels(hotels):
     """Format hotel data for display"""
     if not hotels:
         return "No hotels found."
-    
+
     result = ""
     for i, hotel in enumerate(hotels):
-        result += f"Hotel {i+1}: {hotel.get('hotel_name', 'N/A')}\n"
+        result += f"Hotel {i + 1}: {hotel.get('hotel_name', 'N/A')}\n"
         result += f"  County: {hotel.get('county', 'N/A')}\n"
         result += f"  State: {hotel.get('state', 'N/A')}\n"
         result += f"  Rating: {hotel.get('rating', 'N/A')}\n"
         result += f"  Cleanliness: {hotel.get('cleanliness', 'N/A')}\n"
         result += f"  Service: {hotel.get('service', 'N/A')}\n\n"
-    
+
     return result
+
 
 def natural_language_query(query):
     """
@@ -134,23 +140,23 @@ Query: {query}
         # Get structured response from LLM
         response = llm.invoke(prompt)
         parsed = json.loads(response)
-        
+
         # Route to appropriate function
         if parsed.get("type") == "flights":
             query_type = parsed.get("query_type")
             params = parsed.get("params", {})
-            
+
             if query_type == "all_flights":
                 return query_flights("all_flights")
             elif query_type == "by_airports":
                 return query_flights("by_airports", params.get("starting", ""), params.get("destination", ""))
             elif query_type == "by_airline":
                 return query_flights("by_airline", params.get("airline", ""))
-        
+
         elif parsed.get("type") == "hotels":
             query_type = parsed.get("query_type")
             params = parsed.get("params", {})
-            
+
             if query_type == "all_hotels":
                 return query_hotels()
             elif query_type == "by_county":
@@ -159,23 +165,24 @@ Query: {query}
                 return query_hotels(state=params.get("state", ""))
             elif query_type == "by_county_and_state":
                 return query_hotels(county=params.get("county", ""), state=params.get("state", ""))
-        
+
         return "Couldn't understand the query. Please try again."
     except Exception as e:
         return f"Error processing query: {str(e)}\n\nRaw LLM response: {response}"
+
 
 # Create Gradio interface
 with gr.Blocks(title="Travel Database ChatBot") as demo:
     gr.Markdown("# Travel Database ChatBot")
     gr.Markdown("Ask questions about flights and hotels in natural language")
-    
+
     with gr.Tab("Natural Language Query"):
         with gr.Row():
             nl_input = gr.Textbox(label="Your Question", placeholder="e.g., Show me flights from LAX to JFK")
             nl_button = gr.Button("Search")
         nl_output = gr.Textbox(label="Results", lines=10)
         nl_button.click(natural_language_query, inputs=[nl_input], outputs=[nl_output])
-    
+
     with gr.Tab("Flights Search"):
         with gr.Row():
             query_type = gr.Radio(
@@ -183,12 +190,13 @@ with gr.Blocks(title="Travel Database ChatBot") as demo:
                 label="Query Type",
                 value="All Flights"
             )
-        
+
         with gr.Row():
             starting_airport = gr.Textbox(label="Starting Airport Code", visible=False)
             destination_airport = gr.Textbox(label="Destination Airport Code", visible=False)
             airline_name = gr.Textbox(label="Airline Name", visible=False)
-        
+
+
         def update_visibility(query_type):
             if query_type == "All Flights":
                 return gr.update(visible=False), gr.update(visible=False), gr.update(visible=False)
@@ -196,16 +204,18 @@ with gr.Blocks(title="Travel Database ChatBot") as demo:
                 return gr.update(visible=True), gr.update(visible=True), gr.update(visible=False)
             else:  # Search by Airline
                 return gr.update(visible=False), gr.update(visible=False), gr.update(visible=True)
-        
+
+
         query_type.change(
             update_visibility,
             inputs=[query_type],
             outputs=[starting_airport, destination_airport, airline_name]
         )
-        
+
         flight_button = gr.Button("Search Flights")
         flight_results = gr.Textbox(label="Results", lines=10)
-        
+
+
         def process_flight_query(query_type, starting, destination, airline):
             if query_type == "All Flights":
                 return query_flights("all_flights")
@@ -213,21 +223,22 @@ with gr.Blocks(title="Travel Database ChatBot") as demo:
                 return query_flights("by_airports", starting, destination)
             else:  # Search by Airline
                 return query_flights("by_airline", airline)
-        
+
+
         flight_button.click(
             process_flight_query,
             inputs=[query_type, starting_airport, destination_airport, airline_name],
             outputs=[flight_results]
         )
-    
+
     with gr.Tab("Hotels Search"):
         with gr.Row():
             county = gr.Textbox(label="County")
             state = gr.Textbox(label="State")
-        
+
         hotel_button = gr.Button("Search Hotels")
         hotel_results = gr.Textbox(label="Results", lines=10)
-        
+
         hotel_button.click(
             query_hotels,
             inputs=[county, state],
