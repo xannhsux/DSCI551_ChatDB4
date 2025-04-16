@@ -2,21 +2,22 @@ FROM python:3.10-slim
 
 WORKDIR /app
 
-# Copy requirements file
+# 复制依赖文件
 COPY frontend-requirements.txt .
 
-# Install dependencies
+# 安装依赖
 RUN pip install --no-cache-dir -r frontend-requirements.txt
 
-# Copy the Gradio application
+# 复制 Gradio 应用
 COPY gradio_app.py .
 
-# Set environment variables with defaults
+# 设置环境变量，提供默认值
 ENV API_URL=http://backend:8000
 ENV OLLAMA_HOST=http://ollama:11434
 
-# Install Ollama models during build (this will be cached in the Docker image)
-RUN python -c "from langchain_community.llms.ollama import Ollama; Ollama(model='llama3', base_url='${OLLAMA_HOST}')"
+# 添加健康检查，等待 Ollama 服务就绪
+HEALTHCHECK --interval=5s --timeout=3s --start-period=10s --retries=3 \
+  CMD curl -f ${OLLAMA_HOST}/api/tags || exit 1
 
-# Run the Gradio app
+# 运行应用
 CMD ["python", "gradio_app.py"]
