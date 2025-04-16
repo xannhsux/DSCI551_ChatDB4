@@ -1,24 +1,49 @@
 version: "3.8"
 
 services:
-  backend:
-    build:
-      context: backend
-      dockerfile: backend/Dockerfile
-    ports:
-      - "8100:8100"
-    volumes:
-      - ./backend:/app      
-    depends_on:
-      - mongo         
-
-  mongo:
+  mongodb:
     image: mongo:latest
-    restart: always
     ports:
       - "27017:27017"
     volumes:
       - mongo_data:/data/db
+    restart: always
+
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./app:/app/app
+      - ./data:/app/data
+    depends_on:
+      - mongodb
+    environment:
+      - MONGO_HOST=mongodb
+      - MONGO_PORT=27017
+      - MONGO_URI=mongodb+srv://flightsdata:dsci551@flightsdata.y57hp.mongodb.net/?retryWrites=true&w=majority
+
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile.gradio
+    ports:
+      - "7860:7860"
+    depends_on:
+      - backend
+    environment:
+      - API_URL=http://backend:8000
+      - OLLAMA_HOST=http://ollama:11434
+
+  ollama:
+    image: ollama/ollama:latest
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
 
 volumes:
   mongo_data:
+  ollama_data:
