@@ -1,0 +1,44 @@
+services:
+  mongodb:
+    image: mongo:latest
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo_data:/data/db
+
+  ollama:
+    image: ollama/ollama:latest
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    environment:
+      - MONGO_HOST=mongodb
+      - OLLAMA_HOST=ollama
+    depends_on:
+      - mongodb
+      - ollama
+    volumes:
+      - ./data:/data
+
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile.gradio
+    ports:
+      - "7860:7860"
+    depends_on:
+      - api
+    environment:
+      - API_URL=http://api:8000
+
+volumes:
+  mongo_data:
+  ollama_data:

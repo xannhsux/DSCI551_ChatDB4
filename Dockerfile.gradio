@@ -1,0 +1,16 @@
+FROM python:3.10-slim
+
+WORKDIR /app
+
+
+COPY frontend-requirements.txt .
+# 安装必要的依赖
+RUN pip install --no-cache-dir -r frontend-requirements.txt
+# 复制 gradio 应用
+COPY app/gradio_app.py .
+
+# 设置环境变量
+ENV API_URL=http://api:8000
+
+# 运行应用
+CMD ["python", "gradio_app.py"]

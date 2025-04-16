@@ -1,0 +1,6 @@
+gradio
+requests
+langchain==0.0.267
+pydantic==1.10.8
+sqlalchemy
+ollama
