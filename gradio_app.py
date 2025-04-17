@@ -92,7 +92,7 @@ def call_ollama(prompt):
     """
     try:
         payload = {
-            "model": "llama3",
+            "model": "tinyllama",
             "prompt": prompt,
             "stream": False
         }
@@ -149,42 +149,42 @@ def natural_language_query(query):
 
 不要提供额外解释，只返回JSON对象。
 """
-    
+
     full_prompt = f"{system_prompt}\n\n用户查询: {query}"
-    
+
     try:
         # 调用Ollama API
         response = call_ollama(full_prompt)
-        
+
         # 尝试从响应中提取JSON
         try:
             # 查找JSON开始的位置
             json_start = response.find('{')
             json_end = response.rfind('}') + 1
-            
+
             if json_start >= 0 and json_end > json_start:
                 json_str = response[json_start:json_end]
                 parsed = json.loads(json_str)
             else:
                 # 如果没有找到JSON格式，退回到关键词匹配
                 return fallback_natural_language_query(query)
-            
+
             # 根据解析结果路由到相应的函数
             if parsed.get("type") == "flights":
                 query_type = parsed.get("query_type")
                 params = parsed.get("params", {})
-                
+
                 if query_type == "all_flights":
                     return query_flights("all_flights")
                 elif query_type == "by_airports":
                     return query_flights("by_airports", params.get("starting", ""), params.get("destination", ""))
                 elif query_type == "by_airline":
                     return query_flights("by_airline", params.get("airline", ""))
-            
+
             elif parsed.get("type") == "hotels":
                 query_type = parsed.get("query_type")
                 params = parsed.get("params", {})
-                
+
                 if query_type == "all_hotels":
                     return query_hotels()
                 elif query_type == "by_county":
@@ -193,7 +193,7 @@ def natural_language_query(query):
                     return query_hotels(state=params.get("state", ""))
                 elif query_type == "by_county_and_state":
                     return query_hotels(county=params.get("county", ""), state=params.get("state", ""))
-            
+
             return "无法理解查询。请尝试更具体的表述。"
         except json.JSONDecodeError:
             # 如果JSON解析失败，退回到关键词匹配
