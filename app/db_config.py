@@ -11,8 +11,12 @@ MONGO_HOST = os.environ.get("MONGO_HOST", "mongodb")
 MONGO_PORT = os.environ.get("MONGO_PORT", "27017")
 LOCAL_MONGO_URI = f"mongodb://{MONGO_HOST}:{MONGO_PORT}"
 
-# SQLite Configuration
-SQLITE_DB_PATH = os.environ.get("SQLITE_DB_PATH", os.path.join(os.getcwd(), "hotel.db"))
 
-# Create SQLAlchemy engine for Gradio app
-sql_engine = create_engine(f"sqlite:///{SQLITE_DB_PATH}")
+# SQLite Configuration
+SQLITE_DB_DIR = os.environ.get("SQLITE_DB_DIR", os.path.join(os.getcwd(), "data"))
+LOCATION_DB_PATH = os.path.join(SQLITE_DB_DIR, "hotel_location.sql")
+RATE_DB_PATH = os.path.join(SQLITE_DB_DIR, "hotel_rate.sql")
+
+# Create SQLAlchemy engines for Gradio app
+location_engine = create_engine(f"sqlite:///{LOCATION_DB_PATH}")
+rate_engine = create_engine(f"sqlite:///{RATE_DB_PATH}")
