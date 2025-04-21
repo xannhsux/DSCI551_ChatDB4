@@ -3,43 +3,43 @@ import os
 import logging
 from sqlalchemy import create_engine, text
 
-# 设置日志
+# Set up logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# SQLite数据库路径
+# SQLite database paths
 SQLITE_DB_DIR = os.environ.get("SQLITE_DB_DIR", os.path.join(os.getcwd(), "data"))
 LOCATION_DB_PATH = os.path.join(SQLITE_DB_DIR, "hotel_location.db")
 RATE_DB_PATH = os.path.join(SQLITE_DB_DIR, "hotel_rate.db")
 
-# 创建SQLAlchemy引擎
+# Create SQLAlchemy engines
 location_engine = create_engine(f"sqlite:///{LOCATION_DB_PATH}")
 rate_engine = create_engine(f"sqlite:///{RATE_DB_PATH}")
 
 def get_connection(db_path):
     """
-    返回到指定SQLite数据库的连接
+    Return a connection to the specified SQLite database
     """
     try:
         conn = sqlite3.connect(db_path)
-        conn.row_factory = sqlite3.Row  # 返回类似字典的对象
+        conn.row_factory = sqlite3.Row  # Returns dictionary-like objects
         return conn
     except Exception as e:
-        logger.error(f"连接SQLite数据库时出错 {db_path}: {e}")
+        logger.error(f"Error connecting to SQLite database {db_path}: {e}")
         raise
 
 def execute_sql_query(db_path, query, params=(), fetch_all=True):
     """
-    执行SQL查询并返回结果
+    Execute SQL query and return results
     
-    参数:
-        db_path: 数据库文件路径
-        query: SQL查询字符串
-        params: 查询参数
-        fetch_all: 是否获取所有结果，False只获取一行
+    Args:
+        db_path: Database file path
+        query: SQL query string
+        params: Query parameters
+        fetch_all: Whether to fetch all results, False fetches only one row
         
-    返回:
-        查询结果列表
+    Returns:
+        Query results list
     """
     try:
         conn = get_connection(db_path)
@@ -54,9 +54,9 @@ def execute_sql_query(db_path, query, params=(), fetch_all=True):
         conn.commit()
         return results
     except Exception as e:
-        logger.error(f"执行查询时出错 {db_path}: {e}")
-        logger.error(f"查询: {query}")
-        logger.error(f"参数: {params}")
+        logger.error(f"Error executing query on {db_path}: {e}")
+        logger.error(f"Query: {query}")
+        logger.error(f"Params: {params}")
         raise
     finally:
         if conn:
@@ -64,19 +64,19 @@ def execute_sql_query(db_path, query, params=(), fetch_all=True):
 
 def create_views():
     """
-    创建连接所有表的视图
+    Create views connecting all tables
     """
     try:
-        # 1. 创建酒店视图 - 连接所有酒店名称表和位置表
-        # 检查视图是否已存在
+        # 1. Create hotel view - connect all hotel name tables and location table
+        # Check if view already exists
         hotel_view_check_query = "SELECT name FROM sqlite_master WHERE type='view' AND name='hotel_complete_view'"
         hotel_view_exists = execute_sql_query(LOCATION_DB_PATH, hotel_view_check_query)
         
         if not hotel_view_exists:
-            # 创建酒店视图
+            # Create hotel view
             create_hotel_view_query = """
             CREATE VIEW IF NOT EXISTS hotel_complete_view AS
-            -- 从hotel_name1获取
+            -- From hotel_name1
             SELECT 
                 h1.ID, 
                 h1.hotel_name, 
@@ -87,7 +87,7 @@ def create_views():
             
             UNION ALL
             
-            -- 从hotel_name2获取 (注意列名不同)
+            -- From hotel_name2 (note different column name)
             SELECT 
                 h2.hotel AS ID, 
                 h2.hotel_name, 
@@ -98,7 +98,7 @@ def create_views():
             
             UNION ALL
             
-            -- 从hotel_name3获取
+            -- From hotel_name3
             SELECT 
                 h3.ID, 
                 h3.hotel_name, 
@@ -108,17 +108,17 @@ def create_views():
             JOIN location l ON h3.ID = l.ID
             """
             execute_sql_query(LOCATION_DB_PATH, create_hotel_view_query)
-            logger.info("成功创建hotel_complete_view视图")
+            logger.info("Successfully created hotel_complete_view")
         else:
-            logger.info("hotel_complete_view视图已存在")
+            logger.info("hotel_complete_view already exists")
         
-        # 2. 创建评分视图 - 在rate数据库中
-        # 检查视图是否已存在
+        # 2. Create rating view - in rate database
+        # Check if view already exists
         rate_view_check_query = "SELECT name FROM sqlite_master WHERE type='view' AND name='rate_complete_view'"
         rate_view_exists = execute_sql_query(RATE_DB_PATH, rate_view_check_query)
         
         if not rate_view_exists:
-            # 创建评分视图
+            # Create rating view
             create_rate_view_query = """
             CREATE VIEW IF NOT EXISTS rate_complete_view AS
             SELECT 
@@ -131,30 +131,30 @@ def create_views():
             FROM rate r
             """
             execute_sql_query(RATE_DB_PATH, create_rate_view_query)
-            logger.info("成功创建rate_complete_view视图")
+            logger.info("Successfully created rate_complete_view")
         else:
-            logger.info("rate_complete_view视图已存在")
+            logger.info("rate_complete_view already exists")
             
         return True
     except Exception as e:
-        logger.error(f"创建视图时出错: {e}")
+        logger.error(f"Error creating views: {e}")
         return False
 
-# 应用启动时创建视图
+# Create views when application starts
 create_views_result = create_views()
 if not create_views_result:
-    logger.warning("无法创建视图，将使用备用查询方法")
+    logger.warning("Unable to create views, will use fallback query methods")
 
 def get_all_hotels():
     """
-    获取所有酒店信息（不包含评分）
+    Get all hotel information (without ratings)
     """
     try:
         query = "SELECT DISTINCT ID, hotel_name, county, state FROM hotel_complete_view"
         return execute_sql_query(LOCATION_DB_PATH, query)
     except Exception as e:
-        logger.error(f"获取所有酒店时出错: {e}")
-        # 备用方法
+        logger.error(f"Error getting all hotels: {e}")
+        # Fallback method
         result = []
         try:
             loc_query = "SELECT ID, county, state FROM location"
@@ -170,12 +170,12 @@ def get_all_hotels():
                 })
             return result
         except Exception as e2:
-            logger.error(f"备用方法也失败: {e2}")
+            logger.error(f"Fallback method also failed: {e2}")
             raise
 
 def get_hotel_name_fallback(hotel_id):
     """
-    备用方法：从酒店名称表中获取酒店名称
+    Fallback method: Get hotel name from hotel name tables
     """
     hotel_name_tables = ['hotel_name1', 'hotel_name2', 'hotel_name3']
     
@@ -197,7 +197,7 @@ def get_hotel_name_fallback(hotel_id):
 
 def get_all_reviews():
     """
-    获取所有酒店评论并包含名称 - 使用视图连接
+    Get all hotel reviews with names - using view connections
     """
     try:
         query = """
@@ -214,13 +214,13 @@ def get_all_reviews():
         JOIN hotel_complete_view h ON r.ID = h.ID
         """
         
-        # 尝试使用连接查询视图表
+        # Try using joined query on view tables
         try:
-            # 注意：跨数据库查询在SQLite中不直接支持，我们需要在代码层面实现
+            # Note: Cross-database queries aren't directly supported in SQLite, we need to implement at code level
             hotel_data = execute_sql_query(LOCATION_DB_PATH, "SELECT DISTINCT ID, hotel_name, county, state FROM hotel_complete_view")
             rate_data = execute_sql_query(RATE_DB_PATH, "SELECT * FROM rate_complete_view")
             
-            # 创建ID到hotel信息的映射
+            # Create mapping from ID to hotel information
             hotel_map = {hotel['ID']: hotel for hotel in hotel_data}
             
             result = []
@@ -234,7 +234,7 @@ def get_all_reviews():
                         rate['service'],
                         rate['rooms'],
                         rate['cleanliness'],
-                        0,  # 替代 value 列
+                        0,  # Placeholder for value column
                         hotel['hotel_name'],
                         hotel['county'],
                         hotel['state']
@@ -242,16 +242,16 @@ def get_all_reviews():
             
             return result
         except Exception as e:
-            logger.warning(f"视图连接查询失败，使用备用方法: {e}")
+            logger.warning(f"View join query failed, using fallback method: {e}")
             
-            # 从视图中获取所有酒店
+            # Get all hotels from view
             hotels = get_all_hotels()
             
             result = []
             for hotel in hotels:
                 hotel_id = hotel['ID']
                 
-                # 获取评分信息
+                # Get rating information
                 rate_query = """
                 SELECT 
                     rating, 
@@ -271,7 +271,7 @@ def get_all_reviews():
                         rate['service'],
                         rate['rooms'],
                         rate['cleanliness'],
-                        0,  # 替代 value 列
+                        0,  # Placeholder for value column
                         hotel['hotel_name'],
                         hotel['county'],
                         hotel['state']
@@ -279,29 +279,29 @@ def get_all_reviews():
             
             return result
     except Exception as e:
-        logger.error(f"获取所有评论时出错: {e}")
+        logger.error(f"Error getting all reviews: {e}")
         raise
 
 def get_reviews_by_county(county):
     """
-    获取特定县的酒店评论 - 使用视图表
+    Get hotel reviews for a specific county - using view tables
     """
     try:
-        # 从视图中获取指定县的所有酒店
+        # Get all hotels in the specified county from view
         county_query = "SELECT ID, hotel_name, county, state FROM hotel_complete_view WHERE county = ?"
         hotels = execute_sql_query(LOCATION_DB_PATH, county_query, (county,))
         
-        # 获取所有酒店ID
+        # Get all hotel IDs
         hotel_ids = [hotel['ID'] for hotel in hotels]
         
         if not hotel_ids:
-            return []  # 如果没有找到酒店，返回空列表
+            return []  # If no hotels found, return empty list
         
-        # 创建ID到hotel信息的映射
+        # Create mapping from ID to hotel information
         hotel_map = {hotel['ID']: hotel for hotel in hotels}
         
-        # 获取这些酒店的评分信息
-        # 由于SQLite不支持数组参数，我们需要构建参数列表
+        # Get ratings for these hotels
+        # Since SQLite doesn't support array parameters, we need to build a parameter list
         placeholders = ','.join(['?' for _ in hotel_ids])
         rate_query = f"""
         SELECT * 
@@ -322,7 +322,7 @@ def get_reviews_by_county(county):
                     rate['service'],
                     rate['rooms'],
                     rate['cleanliness'],
-                    0,  # 替代 value 列
+                    0,  # Placeholder for value column
                     hotel['hotel_name'],
                     hotel['county'],
                     hotel['state']
@@ -330,29 +330,29 @@ def get_reviews_by_county(county):
         
         return result
     except Exception as e:
-        logger.error(f"获取县评论时出错 {county}: {e}")
+        logger.error(f"Error getting reviews by county {county}: {e}")
         raise
 
 def get_reviews_by_state(state):
     """
-    获取特定州的酒店评论 - 使用视图表
+    Get hotel reviews for a specific state - using view tables
     """
     try:
-        # 从视图中获取指定州的所有酒店
+        # Get all hotels in the specified state from view
         state_query = "SELECT ID, hotel_name, county, state FROM hotel_complete_view WHERE state = ?"
         hotels = execute_sql_query(LOCATION_DB_PATH, state_query, (state,))
         
-        # 获取所有酒店ID
+        # Get all hotel IDs
         hotel_ids = [hotel['ID'] for hotel in hotels]
         
         if not hotel_ids:
-            return []  # 如果没有找到酒店，返回空列表
+            return []  # If no hotels found, return empty list
         
-        # 创建ID到hotel信息的映射
+        # Create mapping from ID to hotel information
         hotel_map = {hotel['ID']: hotel for hotel in hotels}
         
-        # 获取这些酒店的评分信息
-        # 由于SQLite不支持数组参数，我们需要构建参数列表
+        # Get ratings for these hotels
+        # Since SQLite doesn't support array parameters, we need to build a parameter list
         placeholders = ','.join(['?' for _ in hotel_ids])
         rate_query = f"""
         SELECT * 
@@ -373,7 +373,7 @@ def get_reviews_by_state(state):
                     rate['service'],
                     rate['rooms'],
                     rate['cleanliness'],
-                    0,  # 替代 value 列
+                    0,  # Placeholder for value column
                     hotel['hotel_name'],
                     hotel['county'],
                     hotel['state']
@@ -381,25 +381,25 @@ def get_reviews_by_state(state):
         
         return result
     except Exception as e:
-        logger.error(f"获取州评论时出错 {state}: {e}")
+        logger.error(f"Error getting reviews by state {state}: {e}")
         raise
 
 def get_average_ratings_by_state():
     """
-    获取每个州酒店的平均评分
+    Get average ratings for hotels in each state
     """
     try:
-        # 从视图获取所有酒店
+        # Get all hotels from view
         hotels_query = "SELECT DISTINCT ID, state FROM hotel_complete_view ORDER BY state"
         hotels = execute_sql_query(LOCATION_DB_PATH, hotels_query)
         
-        # 按州分组
+        # Group by state
         state_ratings = {}
         for hotel in hotels:
             hotel_id = hotel['ID']
             state = hotel['state']
             
-            # 获取评分信息
+            # Get rating information
             rate_query = "SELECT rating FROM rate WHERE ID = ?"
             rate = execute_sql_query(RATE_DB_PATH, rate_query, (hotel_id,), fetch_all=False)
             
@@ -410,51 +410,51 @@ def get_average_ratings_by_state():
                 state_ratings[state]['sum'] += rate['rating']
                 state_ratings[state]['count'] += 1
         
-        # 计算平均值
+        # Calculate averages
         result = []
         for state, data in state_ratings.items():
             avg_rating = data['sum'] / data['count'] if data['count'] > 0 else 0
             result.append({'state': state, 'avg_rating': avg_rating, 'hotel_count': data['count']})
         
-        # 按平均评分排序（最高在前）
+        # Sort by average rating (highest first)
         result.sort(key=lambda x: x['avg_rating'], reverse=True)
         
         return result
     except Exception as e:
-        logger.error(f"获取州平均评分时出错: {e}")
+        logger.error(f"Error getting average ratings by state: {e}")
         raise
 
 def count_hotels_by_state():
     """
-    统计每个州的酒店数量
+    Count number of hotels per state
     """
     try:
         query = "SELECT state, COUNT(DISTINCT ID) as count FROM hotel_complete_view GROUP BY state ORDER BY count DESC"
         return execute_sql_query(LOCATION_DB_PATH, query)
     except Exception as e:
-        logger.error(f"按州统计酒店时出错: {e}")
+        logger.error(f"Error counting hotels by state: {e}")
         raise
 
 def find_hotels_with_min_rating(min_rating):
     """
-    查找评分至少为指定值的酒店 - 使用视图表
+    Find hotels with rating at least the specified value - using view tables
     """
     try:
-        # 首先获取评分高于指定值的酒店ID和评分信息
+        # First get hotel IDs and rating information with ratings above the specified value
         rate_query = f"SELECT * FROM rate_complete_view WHERE rating >= {min_rating}"
         rate_matches = execute_sql_query(RATE_DB_PATH, rate_query)
         
-        # 获取所有符合条件的酒店ID
+        # Get all qualifying hotel IDs
         hotel_ids = [rate['ID'] for rate in rate_matches]
         
         if not hotel_ids:
-            return []  # 如果没有找到酒店，返回空列表
+            return []  # If no hotels found, return empty list
         
-        # 创建ID到rate信息的映射
+        # Create mapping from ID to rate information
         rate_map = {rate['ID']: rate for rate in rate_matches}
         
-        # 获取这些酒店的信息
-        # 由于SQLite不支持数组参数，我们需要构建参数列表
+        # Get information for these hotels
+        # Since SQLite doesn't support array parameters, we need to build a parameter list
         placeholders = ','.join(['?' for _ in hotel_ids])
         hotel_query = f"""
         SELECT * 
@@ -475,7 +475,7 @@ def find_hotels_with_min_rating(min_rating):
                     rate['service'],
                     rate['rooms'],
                     rate['cleanliness'],
-                    0,  # 替代 value 列
+                    0,  # Placeholder for value column
                     hotel['hotel_name'],
                     hotel['county'],
                     hotel['state']
@@ -483,12 +483,12 @@ def find_hotels_with_min_rating(min_rating):
         
         return result
     except Exception as e:
-        logger.error(f"查找最低评分酒店时出错 {min_rating}: {e}")
+        logger.error(f"Error finding hotels with minimum rating {min_rating}: {e}")
         raise
 
 def execute_custom_query(query, is_location_db=True):
     """
-    执行自定义SQL查询
+    Execute custom SQL query
     """
     db_path = LOCATION_DB_PATH if is_location_db else RATE_DB_PATH
     return execute_sql_query(db_path, query)
