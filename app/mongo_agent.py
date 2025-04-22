@@ -2,49 +2,52 @@ from pymongo import MongoClient
 import os
 import json
 from bson import json_util, ObjectId
+from .db_config import MONGO_URI, MONGO_DB, MONGO_COLLECTIONS, LOCAL_MONGO_URI
 
-# 使用环境变量获取URI，默认使用硬编码的URI
-MONGO_URI = os.environ.get("MONGO_URI", "mongodb+srv://flightsdata:dsci551@flightsdata.y57hp.mongodb.net/?retryWrites=true&w=majority")
+# Use environment variables to get URI, default to hardcoded URI
+MONGO_URI = os.environ.get("MONGO_URI",
+                           "mongodb+srv://flightsdata:dsci551@flightsdata.y57hp.mongodb.net/?retryWrites=true&w=majority")
 
-# 本地MongoDB连接字符串（作为备选）
+# Local MongoDB connection string (as backup)
 MONGO_HOST = os.environ.get("MONGO_HOST", "mongodb")
 MONGO_PORT = os.environ.get("MONGO_PORT", "27017")
 LOCAL_MONGO_URI = f"mongodb://{MONGO_HOST}:{MONGO_PORT}"
 
+
 def get_client():
     """
-    获取MongoDB客户端连接，优先使用云端，失败则使用本地
+    Get MongoDB client connection, prioritizing cloud connection
     """
     try:
-        # 先尝试连接云端MongoDB
+        # Try to connect to cloud MongoDB first
         client = MongoClient(MONGO_URI)
-        # 测试连接
+        # Test connection
         client.server_info()
-        print("连接到云端MongoDB成功")
+        print("Successfully connected to cloud MongoDB")
         return client
     except Exception as e:
-        print(f"连接到云端MongoDB失败: {e}")
+        print(f"Failed to connect to cloud MongoDB: {e}")
         try:
-            # 尝试使用本地MongoDB作为后备
+            # Try using local MongoDB as fallback
             client = MongoClient(LOCAL_MONGO_URI)
             client.server_info()
-            print("连接到本地MongoDB成功")
+            print("Successfully connected to local MongoDB")
             return client
         except Exception as e:
-            print(f"连接到本地MongoDB失败: {e}")
-            # 重新抛出异常
+            print(f"Failed to connect to local MongoDB: {e}")
+            # Re-raise exception
             raise
 
 
-# 获取客户端连接
+# Get client connection
 client = get_client()
-db = client["flights"]  # 连接到flights数据库
+db = client["flights"]  # Connect to flights database
 
 
-# 用于处理ObjectId的函数
+# Function to handle ObjectId conversion
 def convert_objectid_to_str(document):
     """
-    将文档中的ObjectId转换为字符串
+    Convert ObjectId in documents to strings
     """
     if isinstance(document, list):
         return [convert_objectid_to_str(item) for item in document]
@@ -62,141 +65,185 @@ def convert_objectid_to_str(document):
         return document
 
 
-# Schema Exploration 功能
+# Schema Exploration functions
 def get_collections():
     """
-    获取数据库中的所有集合
+    Get all collections in the database
     """
     return db.list_collection_names()
 
 
 def get_sample_documents(collection_name, limit=5):
     """
-    获取指定集合的样本文档
+    Get sample documents from specified collection
     """
-    collection = db[collection_name]
+    # Use the correct collection name from config if it's a known collection
+    if collection_name in MONGO_COLLECTIONS:
+        actual_collection = MONGO_COLLECTIONS[collection_name]
+    else:
+        actual_collection = collection_name
+        
+    collection = db[actual_collection]
     docs = list(collection.find().limit(limit))
     return convert_objectid_to_str(docs)
 
 
-# 基本查询功能
+# Basic query functions
 def find_with_projection(collection_name, query={}, projection=None, limit=100):
     """
-    使用投影执行find查询
+    Execute find query with projection
     """
-    collection = db[collection_name]
+    # Use the correct collection name from config if it's a known collection
+    if collection_name in MONGO_COLLECTIONS:
+        actual_collection = MONGO_COLLECTIONS[collection_name]
+    else:
+        actual_collection = collection_name
+        
+    collection = db[actual_collection]
     docs = list(collection.find(query, projection).limit(limit))
     return convert_objectid_to_str(docs)
 
 
 def aggregate(collection_name, pipeline):
     """
-    执行聚合管道查询
+    Execute aggregation pipeline query
     """
-    collection = db[collection_name]
+    # Use the correct collection name from config if it's a known collection
+    if collection_name in MONGO_COLLECTIONS:
+        actual_collection = MONGO_COLLECTIONS[collection_name]
+    else:
+        actual_collection = collection_name
+        
+    collection = db[actual_collection]
     docs = list(collection.aggregate(pipeline))
     return convert_objectid_to_str(docs)
 
 
-# 航班查询功能，更新为使用新的集合名称和字段
-def get_all_flights(collection_name="flights_basic", limit=100):
+# Flight query functions
+def get_all_flights(limit=100):
     """
-    获取所有航班（带限制）
+    Get all flights (with limit) and include airline information
     """
-    print(f"获取所有航班，使用集合: {collection_name}")
-    collection = db[collection_name]
-    docs = list(collection.find({}).limit(limit))
+    # Use the standardized collection names from config
+    flights_collection_name = MONGO_COLLECTIONS["flights"]
+    segments_collection_name = MONGO_COLLECTIONS["segments"]
+
+    print(f"Getting all flights, using collection: {flights_collection_name}")
+    flights_collection = db[flights_collection_name]
+
+    # Use aggregation pipeline to join flights and segments collections
+    pipeline = [
+        {"$lookup": {
+            "from": segments_collection_name,
+            "localField": "originalId",
+            "foreignField": "originalId",
+            "as": "segmentDetails"
+        }},
+        {"$limit": limit}
+    ]
+
+    docs = list(flights_collection.aggregate(pipeline))
     return convert_objectid_to_str(docs)
 
 
-def get_flights_by_airports(starting, destination, collection_name="flights_basic"):
+def get_flights_by_airports(starting, destination):
     """
-    按起始和目的地机场查询航班
+    Query flights by starting and destination airports
     """
-    print(f"查询航班: 从 {starting} 到 {destination}, 使用集合: {collection_name}")
+    # Use the standardized collection name from config
+    collection_name = MONGO_COLLECTIONS["flights"]
+    
+    print(f"Querying flights: from {starting} to {destination}, using collection: {collection_name}")
     collection = db[collection_name]
 
-    # 检查数据库中是否有数据
+    # Check if there's data in the database
     total_flights = collection.count_documents({})
-    print(f"数据库中总航班数: {total_flights}")
+    print(f"Total flights in database: {total_flights}")
 
-    # 获取几个样本记录了解数据结构
+    # Get some sample records to understand the data structure
     sample = list(collection.find({}).limit(2))
     for doc in sample:
-        print(f"样本记录字段: {list(doc.keys())}")
+        print(f"Sample record fields: {list(doc.keys())}")
 
-    # 执行精确查询
+    # Execute exact query
     results = list(collection.find({
         "startingAirport": starting,
         "destinationAirport": destination
     }))
 
-    # 如果没有结果，尝试模糊查询
+    # If no results, try fuzzy query
     if not results:
-        print("精确查询无结果，尝试模糊查询...")
+        print("No exact matches, trying fuzzy query...")
         results = list(collection.find({
             "startingAirport": {"$regex": starting, "$options": "i"},
             "destinationAirport": {"$regex": destination, "$options": "i"}
         }))
 
-    print(f"查询结果数量: {len(results)}")
+    print(f"Number of query results: {len(results)}")
     return convert_objectid_to_str(results)
 
 
-def get_flights_by_airline(airline_name, collection_name="flights_segments"):
+def get_flights_by_airline(airline_name):
     """
-    按航空公司名称查询航班
-    注意：根据新结构，航空公司信息在flights_segments集合中
+    Query flights by airline name
     """
-    print(f"按航空公司查询: {airline_name}, 使用集合: {collection_name}")
-    collection = db[collection_name]
+    # Use the standardized collection names from config
+    segments_collection_name = MONGO_COLLECTIONS["segments"]
+    flights_collection_name = MONGO_COLLECTIONS["flights"]
 
-    # 使用新字段segmentsAirlineName查询
-    # 因为segmentsAirlineName字段可能包含多个航空公司（格式为"airline1||airline2"），使用正则表达式匹配
+    print(f"Querying by airline: {airline_name}, using collection: {segments_collection_name}")
+    collection = db[segments_collection_name]
+
+    # Use segmentsAirlineName field for query
+    # Since segmentsAirlineName may contain multiple airlines (format: "airline1||airline2"), use regex matching
     query = {"segmentsAirlineName": {"$regex": airline_name, "$options": "i"}}
     segments = list(collection.find(query, {"originalId": 1}))
 
     if not segments:
-        print("未找到匹配的航班段")
+        print("No matching flight segments found")
         return []
 
-    # 获取匹配航班段的originalId列表
+    # Get list of originalIds from matching segments
     original_ids = [segment["originalId"] for segment in segments]
 
-    # 在flights_basic集合中查找对应的航班详情
-    basic_collection = db["flights_basic"]
-    results = list(basic_collection.find({"originalId": {"$in": original_ids}}))
+    # Find corresponding flight details in flights collection
+    flights_collection = db[flights_collection_name]
+    results = list(flights_collection.find({"originalId": {"$in": original_ids}}))
 
-    print(f"查询结果数量: {len(results)}")
+    print(f"Number of query results: {len(results)}")
     return convert_objectid_to_str(results)
 
 
-# 高级查询功能
+# Advanced query functions
 def search_flights(query_params, limit=100):
     """
-    使用多种条件搜索航班
+    Search flights with multiple conditions
 
-    query_params可包含:
-    - starting: 出发机场
-    - destination: 目的地机场
-    - airline: 航空公司
-    - max_price: 最高价格
-    - min_price: 最低价格
-    - sort_by: 排序字段
-    - sort_order: 排序顺序 (1 升序, -1 降序)
-    - skip: 跳过的结果数
-    - limit: 返回的最大结果数
+    query_params can include:
+    - starting: departure airport
+    - destination: arrival airport
+    - airline: airline name
+    - max_price: maximum price
+    - min_price: minimum price
+    - sort_by: field to sort by
+    - sort_order: sort order (1 ascending, -1 descending)
+    - skip: number of results to skip
+    - limit: maximum number of results to return
     """
-    print(f"高级搜索航班，参数: {query_params}")
+    # Use the standardized collection names from config
+    flights_collection_name = MONGO_COLLECTIONS["flights"]
+    segments_collection_name = MONGO_COLLECTIONS["segments"]
 
-    # 基本查询条件（用于flights_basic集合）
+    print(f"Advanced flight search, parameters: {query_params}")
+
+    # Basic query conditions (for flights collection)
     basic_query = {}
     if "starting" in query_params and query_params["starting"]:
         basic_query["startingAirport"] = {"$regex": query_params["starting"], "$options": "i"}
     if "destination" in query_params and query_params["destination"]:
         basic_query["destinationAirport"] = {"$regex": query_params["destination"], "$options": "i"}
 
-    # 价格范围条件
+    # Price range conditions
     price_condition = {}
     if "max_price" in query_params and query_params["max_price"]:
         price_condition["$lte"] = float(query_params["max_price"])
@@ -205,75 +252,79 @@ def search_flights(query_params, limit=100):
     if price_condition:
         basic_query["totalFare"] = price_condition
 
-    # 航空公司查询条件（如果有的话，需要在flights_segments集合中查询）
+    # Airline filter (requires query in flights_segments collection)
     has_airline_filter = "airline" in query_params and query_params["airline"]
 
-    # 获取排序参数
+    # Get sort parameters
     sort_field = query_params.get("sort_by", "totalFare")
-    sort_order = int(query_params.get("sort_order", 1))  # 1升序, -1降序
+    sort_order = int(query_params.get("sort_order", 1))  # 1 ascending, -1 descending
 
-    # 获取分页参数
+    # Get pagination parameters
     skip = int(query_params.get("skip", 0))
     limit = int(query_params.get("limit", limit))
 
-    # 如果没有航空公司筛选，直接在flights_basic集合中查询
+    # If no airline filter, query directly in flights collection
     if not has_airline_filter:
-        basic_collection = db["flights_basic"]
-        print(f"构建的查询条件 (flights_basic): {basic_query}")
-        results = list(basic_collection.find(basic_query)
+        flights_collection = db[flights_collection_name]
+        print(f"Built query conditions ({flights_collection_name}): {basic_query}")
+        results = list(flights_collection.find(basic_query)
                        .sort(sort_field, sort_order)
                        .skip(skip)
                        .limit(limit))
         return convert_objectid_to_str(results)
     else:
-        # 如果有航空公司筛选，先在flights_segments中查询匹配的originalId
-        segments_collection = db["flights_segments"]
+        # If airline filter exists, first query flights_segments for matching originalIds
+        segments_collection = db[segments_collection_name]
         segments_query = {"segmentsAirlineName": {"$regex": query_params["airline"], "$options": "i"}}
-        print(f"构建的查询条件 (flights_segments): {segments_query}")
+        print(f"Built query conditions ({segments_collection_name}): {segments_query}")
 
         matching_segments = list(segments_collection.find(segments_query, {"originalId": 1}))
         original_ids = [segment["originalId"] for segment in matching_segments]
 
         if not original_ids:
-            print("未找到匹配航空公司的航班")
+            print("No matching airlines for flights found")
             return []
 
-        # 在flights_basic中查询这些originalId，并应用其他筛选条件
+        # Query flights collection with these originalIds and other filter conditions
         basic_query["originalId"] = {"$in": original_ids}
-        basic_collection = db["flights_basic"]
-        print(f"构建的查询条件 (flights_basic with originalIds): {basic_query}")
+        flights_collection = db[flights_collection_name]
+        print(f"Built query conditions ({flights_collection_name} with originalIds): {basic_query}")
 
-        results = list(basic_collection.find(basic_query)
+        results = list(flights_collection.find(basic_query)
                        .sort(sort_field, sort_order)
                        .skip(skip)
                        .limit(limit))
         return convert_objectid_to_str(results)
 
 
-# 聚合查询示例
+# Aggregation query examples
 def get_average_fare_by_airline():
     """
-    获取各航空公司的平均票价
+    Get average fare by airline
     """
-    # 第一步：从flights_segments获取所有航空公司和对应的originalId
-    segments_collection = db["flights_segments"]
+    # Use the standardized collection names from config
+    flights_collection_name = MONGO_COLLECTIONS["flights"]
+    segments_collection_name = MONGO_COLLECTIONS["segments"]
 
-    # 对segmentsAirlineName进行处理（分割多航空公司的情况）
+    # Step 1: Get all airlines and corresponding originalIds from flights_segments
+    segments_collection = db[segments_collection_name]
+
+    # Process segmentsAirlineName field (split multiple airlines)
     pipeline = [
-        # 展开segmentsAirlineName字段（处理多航空公司情况，如"UA||DL"）
+        # Expand segmentsAirlineName field (handle multiple airlines, like "UA||DL")
         {"$addFields": {
             "airlines": {"$split": ["$segmentsAirlineName", "||"]}
         }},
-        # 展开airlines数组，每个航空公司生成一个文档
+        # Expand airlines array, creating one document per airline
         {"$unwind": "$airlines"},
-        # 按航空公司和originalId分组
+        # Group by airline and originalId
         {"$group": {
             "_id": {
                 "airline": "$airlines",
                 "originalId": "$originalId"
             }
         }},
-        # 仅保留必要字段
+        # Keep only necessary fields
         {"$project": {
             "_id": 0,
             "airline": "$_id.airline",
@@ -283,24 +334,24 @@ def get_average_fare_by_airline():
 
     airline_flights = list(segments_collection.aggregate(pipeline))
 
-    # 第二步：从flights_basic获取对应航班的价格
-    basic_collection = db["flights_basic"]
+    # Step 2: Get corresponding flight prices from flights collection
+    flights_collection = db[flights_collection_name]
 
-    # 按航空公司分组计算平均价格
+    # Calculate average price by airline
     result = {}
 
-    # 对每个航空公司分别计算
+    # Calculate separately for each airline
     airlines = set(item["airline"] for item in airline_flights)
 
     for airline in airlines:
-        # 获取该航空公司的所有originalId
+        # Get all originalIds for this airline
         original_ids = [item["originalId"] for item in airline_flights if item["airline"] == airline]
 
-        # 查询这些originalId对应的航班价格
-        flights = list(basic_collection.find({"originalId": {"$in": original_ids}}, {"totalFare": 1}))
+        # Query these originalIds for flight prices
+        flights = list(flights_collection.find({"originalId": {"$in": original_ids}}, {"totalFare": 1}))
 
         if flights:
-            # 计算平均价格
+            # Calculate average price
             total_fare = sum(flight["totalFare"] for flight in flights)
             avg_fare = total_fare / len(flights)
 
@@ -309,7 +360,7 @@ def get_average_fare_by_airline():
                 "flightCount": len(flights)
             }
 
-    # 转换为列表格式返回
+    # Convert to list format for return
     formatted_result = []
     for airline, data in result.items():
         formatted_result.append({
@@ -318,7 +369,7 @@ def get_average_fare_by_airline():
             "flightCount": data["flightCount"]
         })
 
-    # 按平均价格排序
+    # Sort by average price
     formatted_result.sort(key=lambda x: x["averageFare"])
 
     return formatted_result
@@ -326,9 +377,11 @@ def get_average_fare_by_airline():
 
 def get_popular_routes(limit=10):
     """
-    获取最受欢迎的航线（以航班数量计算）
+    Get most popular routes (by flight count)
     """
-    basic_collection = db["flights_basic"]
+    # Use the standardized collection name from config
+    flights_collection_name = MONGO_COLLECTIONS["flights"]
+    flights_collection = db[flights_collection_name]
 
     pipeline = [
         {"$group": {
@@ -352,22 +405,26 @@ def get_popular_routes(limit=10):
         }}
     ]
 
-    results = list(basic_collection.aggregate(pipeline))
+    results = list(flights_collection.aggregate(pipeline))
     return convert_objectid_to_str(results)
 
 
-# 支持跨集合查询
+# Cross-collection queries
 def join_flight_data(limit=100):
     """
-    连接flights_basic和flights_segments集合的数据
+    Join flights and flights_segments collections data
     """
-    print(f"连接 flights_basic 和 flights_segments 集合的数据")
-    basic_collection = db["flights_basic"]
+    # Use the standardized collection names from config
+    flights_collection_name = MONGO_COLLECTIONS["flights"]
+    segments_collection_name = MONGO_COLLECTIONS["segments"]
 
-    # 使用originalId字段进行连接
+    print(f"Joining {flights_collection_name} and {segments_collection_name} collections data")
+    flights_collection = db[flights_collection_name]
+
+    # Use originalId field for joining
     pipeline = [
         {"$lookup": {
-            "from": "flights_segments",
+            "from": segments_collection_name,
             "localField": "originalId",
             "foreignField": "originalId",
             "as": "segmentDetails"
@@ -375,16 +432,22 @@ def join_flight_data(limit=100):
         {"$limit": limit}
     ]
 
-    results = list(basic_collection.aggregate(pipeline))
+    results = list(flights_collection.aggregate(pipeline))
     return convert_objectid_to_str(results)
 
 
-# 数据修改操作
+# Data modification operations
 def insert_one(collection_name, document):
     """
-    插入单个文档
+    Insert a single document
     """
-    collection = db[collection_name]
+    # Ensure using correct collection name
+    if collection_name in MONGO_COLLECTIONS:
+        actual_collection = MONGO_COLLECTIONS[collection_name]
+    else:
+        actual_collection = collection_name
+
+    collection = db[actual_collection]
     result = collection.insert_one(document)
     return {
         "acknowledged": result.acknowledged,
@@ -394,9 +457,15 @@ def insert_one(collection_name, document):
 
 def insert_many(collection_name, documents):
     """
-    插入多个文档
+    Insert multiple documents
     """
-    collection = db[collection_name]
+    # Ensure using correct collection name
+    if collection_name in MONGO_COLLECTIONS:
+        actual_collection = MONGO_COLLECTIONS[collection_name]
+    else:
+        actual_collection = collection_name
+
+    collection = db[actual_collection]
     result = collection.insert_many(documents)
     return {
         "acknowledged": result.acknowledged,
@@ -407,9 +476,15 @@ def insert_many(collection_name, documents):
 
 def update_one(collection_name, filter_query, update_query):
     """
-    更新单个文档
+    Update a single document
     """
-    collection = db[collection_name]
+    # Ensure using correct collection name
+    if collection_name in MONGO_COLLECTIONS:
+        actual_collection = MONGO_COLLECTIONS[collection_name]
+    else:
+        actual_collection = collection_name
+
+    collection = db[actual_collection]
     result = collection.update_one(filter_query, update_query)
     return {
         "acknowledged": result.acknowledged,
@@ -420,9 +495,15 @@ def update_one(collection_name, filter_query, update_query):
 
 def delete_one(collection_name, filter_query):
     """
-    删除单个文档
+    Delete a single document
     """
-    collection = db[collection_name]
+    # Ensure using correct collection name
+    if collection_name in MONGO_COLLECTIONS:
+        actual_collection = MONGO_COLLECTIONS[collection_name]
+    else:
+        actual_collection = collection_name
+
+    collection = db[actual_collection]
     result = collection.delete_one(filter_query)
     return {
         "acknowledged": result.acknowledged,

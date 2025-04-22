@@ -1,23 +1,44 @@
-# DSCI-551-Project-ChatDB_4
+# Travel Information System
 
-A travel information system that combines flight and hotel data with natural language processing capabilities.
+A comprehensive travel information system that combines flight and hotel data with a user-friendly web interface.
 
 ## System Architecture
 
-This project consists of several components:
+This project consists of several integrated components:
 
 - **Backend API**: A FastAPI application that handles requests for flight and hotel data
-- **Frontend**: A Gradio interface that provides user-friendly access to the data
-- **MongoDB**: Stores flight information
-- **SQLite**: Stores hotel review information
+- **Frontend**: A Streamlit interface that provides user-friendly access to the data
+- **Database Layer**:
+  - **MongoDB**: Stores flight information in two collections (`flights` and `flights_segments`)
+  - **SQLite**: Stores hotel review information in two databases (`hotel_location.db` and `hotel_rate.db`)
 - **Ollama**: Runs a local LLM (Large Language Model) for natural language processing
+
+### Database Structure
+
+#### MongoDB Collections
+- **flights**: Contains flight information including departure/destination airports and pricing
+- **flights_segments**: Contains detailed flight segment information including airline names
+
+#### SQLite Databases
+- **hotel_location.db**: Contains hotel location information (name, county, state)
+- **hotel_rate.db**: Contains hotel ratings and reviews (overall rating, sleep quality, service, etc.)
 
 ## Features
 
-- Search for flights by airports or airlines
-- Search for hotel reviews by county or state
-- Natural language interface for querying both datasets
-- Docker-based deployment for easy setup and scalability
+- **Flight Data**:
+  - Search for flights by departure and destination airports
+  - Search for flights by airline name
+  - View all available flights
+
+- **Hotel Data**:
+  - Search for hotel reviews by county
+  - Search for hotel reviews by state
+  - Filter hotels by minimum rating
+
+- **Frontend**:
+  - Schema exploration for understanding database structure
+  - Structured query interfaces for both flight and hotel data
+  - Data modification capabilities (add, update, delete records)
 
 ## Prerequisites
 
@@ -29,14 +50,14 @@ This project consists of several components:
 
 1. Clone this repository:
    ```bash
-   git clone https://github.com/your-username/DSCI-551-Project-ChatDB_4.git
-   cd DSCI-551-Project-ChatDB_4
+   git clone https://github.com/yourusername/travel-information-system.git
+   cd travel-information-system
    ```
 
-2. Make sure you have the hotel.db SQLite database in the data directory:
+2. Make sure you have the SQLite databases in the data directory:
    ```bash
    mkdir -p data
-   # Copy your hotel.db into the data directory
+   # Copy hotel_location.db and hotel_rate.db into the data directory
    ```
 
 3. Start the application with Docker Compose:
@@ -49,29 +70,37 @@ This project consists of several components:
    docker-compose logs -f
    ```
 
-5. Access the Gradio frontend at: http://localhost:7860
+5. Access the Streamlit frontend at: http://localhost:8501
 
 ## Using the Application
 
-### Natural Language Interface
+### Flight Search
 
-Type queries like:
-- "Show me all flights from LAX to JFK"
-- "What are the hotels in Orange County, California?"
-- "Show me all Delta Airlines flights"
+You can search for flights by:
+- Departure and destination airports
+- Airline name
+- Or view all available flights
 
-### Manual Search Interface
+### Hotel Search
 
-Use the dedicated tabs for more structured searches:
-- **Flights Search**: Filter by airports or airlines
-- **Hotels Search**: Filter by county or state
+You can search for hotels by:
+- County
+- State
+- Minimum rating threshold
+
+### Data Modification
+
+The application also supports:
+- Adding new flight and hotel records
+- Updating existing records
+- Deleting records
 
 ## Development
 
 ### Project Structure
 
 ```
-DSCI-551-Project-ChatDB_4/
+project/
 │
 ├── app/                           # Backend application package
 │   ├── __init__.py                # Makes 'app' a Python package
@@ -81,16 +110,31 @@ DSCI-551-Project-ChatDB_4/
 │   └── sql_agent.py               # SQLite interaction functions
 │
 ├── data/                          # Directory for data files
-│   └── hotel.db                   # SQLite database for hotel data
+│   ├── hotel_location.db          # SQLite database for hotel location
+│   └── hotel_rate.db              # SQLite database for hotel ratings
 │
 ├── docker-compose.yml             # Docker Compose configuration
 ├── Dockerfile                     # Backend Docker configuration
-├── Dockerfile.gradio              # Frontend Docker configuration
-├── frontend-requirements.txt      # Frontend dependencies
-├── gradio_app.py                  # Standalone Gradio application
+├── Dockerfile.streamlit           # Frontend Docker configuration
+├── streamlit-requirements.txt     # Frontend dependencies
+├── streamlit_app.py               # Streamlit application
 ├── requirements.txt               # Backend dependencies
 └── README.md                      # Project documentation
 ```
+
+### API Endpoints
+
+#### Flight Endpoints
+
+- `GET /flights`: Get all flights
+- `GET /flights/airports?starting={code}&destination={code}`: Get flights between specific airports
+- `GET /flights/airline?airline={name}`: Get flights operated by a specific airline
+
+#### Hotel Endpoints
+
+- `GET /hotels`: Get all hotel reviews (with optional filters)
+- `GET /hotels/county/{county}`: Get hotel reviews for a specific county
+- `GET /hotels/state/{state}`: Get hotel reviews for a specific state
 
 ### Environment Variables
 
@@ -101,7 +145,7 @@ The following environment variables can be customized:
 - `MONGO_URI`: MongoDB connection string (default: MongoDB Atlas connection)
 - `MONGO_HOST`: MongoDB hostname (default: mongodb)
 - `MONGO_PORT`: MongoDB port (default: 27017)
-- `SQLITE_DB_PATH`: Path to the SQLite database (default: ./data/hotel.db)
+- `SQLITE_DB_DIR`: Directory containing SQLite databases (default: ./data)
 
 ## Troubleshooting
 
@@ -112,12 +156,12 @@ If you encounter issues connecting to MongoDB, check the following:
 - Verify the MongoDB container is running: `docker-compose ps mongodb`
 - Check MongoDB logs: `docker-compose logs mongodb`
 
-### Ollama Model Loading Issues
+### Database File Issues
 
-If the Ollama model fails to load:
-- Increase the memory allocated to Docker
-- Check Ollama logs: `docker-compose logs ollama`
-- Try restarting the Ollama container: `docker-compose restart ollama`
+If the application can't find the SQLite databases:
+- Make sure `hotel_location.db` and `hotel_rate.db` are in the `data/` directory
+- Verify file permissions allow the containers to read the files
+- Try rebuilding the containers: `docker-compose build --no-cache`
 
 ### API Connection Errors
 
@@ -125,3 +169,11 @@ If the frontend can't connect to the API:
 - Ensure all containers are running: `docker-compose ps`
 - Check the API logs: `docker-compose logs backend`
 - Verify that the `API_URL` environment variable is set correctly in the frontend container
+
+## Contributing
+
+Contributions are welcome! Please feel free to submit a Pull Request.
+
+## License
+
+This project is licensed under the MIT License - see the LICENSE file for details.
