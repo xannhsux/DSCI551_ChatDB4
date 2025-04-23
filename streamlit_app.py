@@ -650,341 +650,227 @@ with tab3:
 
 
 
+
         elif hotel_operation == "Update Hotel":
 
-            # First, let user search for a hotel
+            st.subheader("Update Hotel Information")
 
-            search_col1, search_col2 = st.columns([3, 1])
+            # Let user enter a hotel ID directly
 
-            with search_col1:
+            hotel_id = st.number_input("Enter Hotel ID to update:", min_value=1, step=1)
 
-                search_term = st.text_input("Search for hotel by name", key="hotel_search")
+            if hotel_id:
 
-            with search_col2:
-
-                search_button = st.button("Search", key="hotel_search_btn")
-
-            # Display search results and hotel selection
-
-            if search_button and search_term:
+                # Attempt to fetch the specific hotel by ID
 
                 try:
 
-                    # Use the correct endpoint for hotel name search
+                    fetch_button = st.button("Fetch Hotel Details")
 
-                    response = requests.get(f"{API_URL}/hotels/name/{search_term}")
+                    if fetch_button:
 
-                    if response.status_code == 200:
+                        with st.spinner("Fetching hotel details..."):
 
-                        hotels = response.json()
+                            response = requests.get(f"{API_URL}/hotels/{hotel_id}")
 
-                        if hotels:
+                            if response.status_code == 200:
 
-                            st.session_state.found_hotels = hotels
+                                hotel_data = response.json()
 
-                            st.success(f"Found {len(hotels)} hotels matching '{search_term}'")
+                                if isinstance(hotel_data, list) and len(hotel_data) > 0:
+                                    hotel_data = hotel_data[0]  # Take the first item if it's a list
 
-                            # Display the found hotels in a table
+                                st.success(f"Found hotel: {hotel_data.get('hotel_name', 'Unknown')}")
 
-                            hotel_df = pd.DataFrame(hotels)
-
-                            st.dataframe(hotel_df)
-
-                            # Create a list of hotel options for selection
-
-                            hotel_options = [f"{h['hotel_name']} (ID: {h['ID']})" for h in hotels]
-
-                            selected_hotel = st.selectbox("Select hotel to update", hotel_options)
-
-                            if selected_hotel:
-
-                                # Extract hotel ID from the selection string
-
-                                match = re.search(r'ID: (\d+)', selected_hotel)
-
-                                if match:
-
-                                    hotel_id = int(match.group(1))
-
-                                    # Find the selected hotel data
-
-                                    selected_hotel_data = next((h for h in hotels if h['ID'] == hotel_id), None)
-
-                                    if selected_hotel_data:
-
-                                        with st.form("update_hotel_form"):
-
-                                            st.subheader(f"Update Hotel: {selected_hotel_data.get('hotel_name', '')}")
-
-                                            col1, col2 = st.columns(2)
-
-                                            with col1:
-
-                                                hotel_name = st.text_input("Hotel Name",
-
-                                                                           value=selected_hotel_data.get('hotel_name',
-                                                                                                         ''))
-
-                                                county = st.text_input("County",
-
-                                                                       value=selected_hotel_data.get('county', ''))
-
-                                                state = st.text_input("State (2-letter code)",
-
-                                                                      value=selected_hotel_data.get('state', ''),
-
-                                                                      max_chars=2)
-
-                                            with col2:
-
-                                                # Convert to float with safe defaults
-
-                                                try:
-
-                                                    rating_val = float(selected_hotel_data.get('rating', 3.0))
-
-                                                except (ValueError, TypeError):
-
-                                                    rating_val = 3.0
-
-                                                try:
-
-                                                    cleanliness_val = float(selected_hotel_data.get('cleanliness', 3.0))
-
-                                                except (ValueError, TypeError):
-
-                                                    cleanliness_val = 3.0
-
-                                                try:
-
-                                                    service_val = float(selected_hotel_data.get('service', 3.0))
-
-                                                except (ValueError, TypeError):
-
-                                                    service_val = 3.0
-
-                                                rating = st.slider("Rating", min_value=1.0, max_value=5.0,
-
-                                                                   value=rating_val, step=0.5)
-
-                                                cleanliness = st.slider("Cleanliness", min_value=1.0, max_value=5.0,
-
-                                                                        value=cleanliness_val, step=0.5)
-
-                                                service = st.slider("Service", min_value=1.0, max_value=5.0,
-
-                                                                    value=service_val, step=0.5)
-
-                                            try:
-
-                                                rooms_val = float(selected_hotel_data.get('rooms', 3.0))
-
-                                            except (ValueError, TypeError):
-
-                                                rooms_val = 3.0
-
-                                            rooms = st.slider("Rooms", min_value=1.0, max_value=5.0,
-
-                                                              value=rooms_val, step=0.5)
-
-                                            # Add hidden field for hotel ID to ensure it's included in the form
-
-                                            st.markdown(f"**Hotel ID:** {hotel_id}")
-
-                                            update_button = st.form_submit_button("Update Hotel")
-
-                                            if update_button:
-
-                                                updated_data = {
-
-                                                    "hotel_name": hotel_name,
-
-                                                    "county": county,
-
-                                                    "state": state.upper(),
-
-                                                    "rating": rating,
-
-                                                    "cleanliness": cleanliness,
-
-                                                    "service": service,
-
-                                                    "rooms": rooms
-
-                                                }
-
-                                                try:
-
-                                                    # Use the correct endpoint format and ensure hotel_id is an integer
-
-                                                    update_url = f"{API_URL}/hotels/{hotel_id}"
-
-                                                    st.write(f"Sending update request to: {update_url}")
-
-                                                    st.write(f"Update data: {updated_data}")
-
-                                                    response = requests.put(update_url, json=updated_data)
-
-                                                    if response.status_code == 200:
-
-                                                        st.success(f"Successfully updated hotel: {hotel_name}")
-
-                                                        # Display the SQL queries that would be executed
-
-                                                        st.subheader("Equivalent SQL Queries:")
-
-                                                        # Display the update queries
-
-                                                        hotel_name_update = f"""
-
-                                                        -- Update hotel_name1
-
-                                                        UPDATE hotel_name1 SET hotel_name = '{hotel_name}' 
-
-                                                        WHERE ID = {hotel_id};
-
-                                                        """
-
-                                                        st.code(hotel_name_update, language="sql")
-
-                                                        location_update = f"""
-
-                                                        -- Update location
-
-                                                        UPDATE location SET county = '{county}', state = '{state.upper()}' 
-
-                                                        WHERE ID = {hotel_id};
-
-                                                        """
-
-                                                        st.code(location_update, language="sql")
-
-                                                        rating_update = f"""
-
-                                                        -- Update rate
-
-                                                        UPDATE rate 
-
-                                                        SET rating = {rating}, 
-
-                                                            service = {service}, 
-
-                                                            rooms = {rooms}, 
-
-                                                            cleanliness = {cleanliness}
-
-                                                        WHERE ID = {hotel_id};
-
-                                                        """
-
-                                                        st.code(rating_update, language="sql")
-
-                                                        # Show success message with animation
-
-                                                        st.balloons()
-
-                                                    else:
-
-                                                        st.error(f"Error updating hotel: {response.text}")
-
-                                                        st.json(response.json() if response.headers.get(
-                                                            'content-type') == 'application/json' else {
-                                                            "raw_text": response.text})
-
-                                                except Exception as e:
-
-                                                    st.error(f"Error connecting to API: {str(e)}")
-
-                        else:
-
-                            st.warning(f"No hotels found matching '{search_term}'")
-
-                    else:
-
-                        # Try alternate endpoint if the first one fails
-
-                        try:
-
-                            alternate_response = requests.get(f"{API_URL}/hotels/search?name={search_term}")
-
-                            if alternate_response.status_code == 200:
-
-                                hotels = alternate_response.json()
-
-                                if hotels:
-
-                                    st.session_state.found_hotels = hotels
-
-                                    st.success(f"Found {len(hotels)} hotels matching '{search_term}'")
-
-                                    # Display the found hotels in a table
-
-                                    hotel_df = pd.DataFrame(hotels)
-
-                                    st.dataframe(hotel_df)
-
-                                    # The rest of the code remains the same as above
-
-                                    # ...
-
-                                else:
-
-                                    st.warning(f"No hotels found matching '{search_term}'")
+                                st.session_state.current_hotel = hotel_data
 
                             else:
 
-                                st.error(f"Error searching for hotels: {response.text}")
+                                st.error(f"Error fetching hotel: {response.text}")
 
-                                st.text("Trying fallback search method...")
+                    # If we have hotel data stored in session state, show the update form
 
-                                # Last resort: Get all hotels and filter client-side
+                    if hasattr(st.session_state, 'current_hotel') and st.session_state.current_hotel:
 
-                                all_hotels_response = requests.get(f"{API_URL}/hotels")
+                        hotel_data = st.session_state.current_hotel
 
-                                if all_hotels_response.status_code == 200:
+                        with st.form("update_hotel_form"):
 
-                                    all_hotels = all_hotels_response.json()
+                            col1, col2 = st.columns(2)
 
-                                    # Filter hotels by name (case-insensitive)
+                            with col1:
 
-                                    matching_hotels = [h for h in all_hotels if
-                                                       search_term.lower() in h.get('hotel_name', '').lower()]
+                                hotel_name = st.text_input("Hotel Name",
 
-                                    if matching_hotels:
+                                                           value=hotel_data.get('hotel_name', ''))
 
-                                        st.session_state.found_hotels = matching_hotels
+                                county = st.text_input("County",
 
-                                        st.success(f"Found {len(matching_hotels)} hotels matching '{search_term}'")
+                                                       value=hotel_data.get('county', ''))
 
-                                        # Display the found hotels in a table
+                                state = st.text_input("State (2-letter code)",
 
-                                        hotel_df = pd.DataFrame(matching_hotels)
+                                                      value=hotel_data.get('state', ''),
 
-                                        st.dataframe(hotel_df)
+                                                      max_chars=2)
 
-                                        # Create a list of hotel options for selection
+                            with col2:
 
-                                        hotel_options = [f"{h['hotel_name']} (ID: {h['ID']})" for h in matching_hotels]
+                                # Convert to float with safe defaults
 
-                                        # Continue with selection and form logic...
+                                try:
 
-                                    else:
+                                    rating_val = float(hotel_data.get('rating', 3.0))
 
-                                        st.warning(f"No hotels found matching '{search_term}'")
+                                except (ValueError, TypeError):
 
-                                else:
+                                    rating_val = 3.0
 
-                                    st.error(f"All search methods failed. Please try a different search term.")
+                                try:
 
-                        except Exception as e:
+                                    cleanliness_val = float(hotel_data.get('cleanliness', 3.0))
 
-                            st.error(f"Error with alternate search method: {str(e)}")
+                                except (ValueError, TypeError):
+
+                                    cleanliness_val = 3.0
+
+                                try:
+
+                                    service_val = float(hotel_data.get('service', 3.0))
+
+                                except (ValueError, TypeError):
+
+                                    service_val = 3.0
+
+                                rating = st.slider("Rating", min_value=1.0, max_value=5.0,
+
+                                                   value=rating_val, step=0.5)
+
+                                cleanliness = st.slider("Cleanliness", min_value=1.0, max_value=5.0,
+
+                                                        value=cleanliness_val, step=0.5)
+
+                                service = st.slider("Service", min_value=1.0, max_value=5.0,
+
+                                                    value=service_val, step=0.5)
+
+                            try:
+
+                                rooms_val = float(hotel_data.get('rooms', 3.0))
+
+                            except (ValueError, TypeError):
+
+                                rooms_val = 3.0
+
+                            rooms = st.slider("Rooms", min_value=1.0, max_value=5.0,
+
+                                              value=rooms_val, step=0.5)
+
+                            # Display the hotel ID (read-only)
+
+                            st.info(f"Hotel ID: {hotel_id}")
+
+                            update_button = st.form_submit_button("Update Hotel")
+
+                            if update_button:
+
+                                updated_data = {
+
+                                    "hotel_name": hotel_name,
+
+                                    "county": county,
+
+                                    "state": state.upper(),
+
+                                    "rating": rating,
+
+                                    "cleanliness": cleanliness,
+
+                                    "service": service,
+
+                                    "rooms": rooms
+
+                                }
+
+                                try:
+
+                                    # Make the update request
+
+                                    with st.spinner("Updating hotel information..."):
+
+                                        update_response = requests.put(f"{API_URL}/hotels/{hotel_id}",
+                                                                       json=updated_data)
+
+                                        if update_response.status_code == 200:
+
+                                            st.success(f"Successfully updated hotel: {hotel_name}")
+
+                                            # Display the SQL queries that would be executed
+
+                                            st.subheader("Equivalent SQL Queries:")
+
+                                            hotel_name_update = f"""
+
+                                            -- Update hotel_name1
+
+                                            UPDATE hotel_name1 SET hotel_name = '{hotel_name}' 
+
+                                            WHERE ID = {hotel_id};
+
+                                            """
+
+                                            st.code(hotel_name_update, language="sql")
+
+                                            location_update = f"""
+
+                                            -- Update location
+
+                                            UPDATE location SET county = '{county}', state = '{state.upper()}' 
+
+                                            WHERE ID = {hotel_id};
+
+                                            """
+
+                                            st.code(location_update, language="sql")
+
+                                            rating_update = f"""
+
+                                            -- Update rate
+
+                                            UPDATE rate 
+
+                                            SET rating = {rating}, 
+
+                                                service = {service}, 
+
+                                                rooms = {rooms}, 
+
+                                                cleanliness = {cleanliness}
+
+                                            WHERE ID = {hotel_id};
+
+                                            """
+
+                                            st.code(rating_update, language="sql")
+
+                                            st.balloons()
+
+                                            # Clear the current hotel data after update
+
+                                            if 'current_hotel' in st.session_state:
+                                                del st.session_state.current_hotel
+
+                                        else:
+
+                                            st.error(f"Error updating hotel: {update_response.text}")
+
+                                except Exception as e:
+
+                                    st.error(f"Error connecting to API: {str(e)}")
 
                 except Exception as e:
 
-                    st.error(f"Error connecting to API: {str(e)}")
-
-
+                    st.error(f"Error: {str(e)}")
 
         elif hotel_operation == "Delete Hotel":
 
@@ -1069,81 +955,260 @@ with tab3:
             )
 
             if flight_operation == "Add New Flight":
-                with st.form("add_flight_form"):
-                    col1, col2 = st.columns(2)
-                    with col1:
-                        original_id = st.text_input("Original ID (unique identifier)", key="add_flight_id")
-                        starting_airport = st.text_input("Starting Airport Code", key="add_starting")
-                        destination_airport = st.text_input("Destination Airport Code", key="add_destination")
-                    with col2:
-                        airline_name = st.text_input("Airline Name", key="add_airline")
-                        total_fare = st.number_input("Total Fare ($)", min_value=0.0, value=100.0, format="%.2f",
-                                                     key="add_fare")
-                        trip_duration = st.number_input("Trip Duration (minutes)", min_value=0, value=180,
-                                                        key="add_duration")
+                # Choose between single and multiple flight addition
+                add_mode = st.radio(
+                    "Select Add Mode",
+                    ["Add Single Flight", "Add Multiple Flights"],
+                    horizontal=True
+                )
 
-                    submit_button = st.form_submit_button("Add Flight")
+                if add_mode == "Add Single Flight":
+                    # Keep the original single flight addition form
+                    with st.form("add_flight_form"):
+                        col1, col2 = st.columns(2)
+                        with col1:
+                            original_id = st.text_input("Original ID (unique identifier)", key="add_flight_id")
+                            starting_airport = st.text_input("Starting Airport Code", key="add_starting")
+                            destination_airport = st.text_input("Destination Airport Code", key="add_destination")
+                        with col2:
+                            airline_name = st.text_input("Airline Name", key="add_airline")
+                            total_fare = st.number_input("Total Fare ($)", min_value=0.0, value=100.0, format="%.2f",
+                                                         key="add_fare")
+                            trip_duration = st.number_input("Trip Duration (minutes)", min_value=0, value=180,
+                                                            key="add_duration")
 
-                    if submit_button:
-                        if not original_id or not starting_airport or not destination_airport:
-                            st.error(
-                                "Please fill in all required fields (Original ID, Starting Airport, Destination Airport)")
-                        else:
-                            # Need to add both flight and segment
-                            flight_data = {
-                                "originalId": original_id,
-                                "startingAirport": starting_airport.upper(),
-                                "destinationAirport": destination_airport.upper(),
-                                "totalFare": total_fare,
-                                "totalTripDuration": trip_duration
-                            }
+                        submit_button = st.form_submit_button("Add Flight")
 
-                            segment_data = {
-                                "originalId": original_id,
-                                "segmentsAirlineName": airline_name
-                            }
+                        if submit_button:
+                            if not original_id or not starting_airport or not destination_airport:
+                                st.error(
+                                    "Please fill in all required fields (Original ID, Starting Airport, Destination Airport)")
+                            else:
+                                # Need to add both flight and segment
+                                flight_data = {
+                                    "originalId": original_id,
+                                    "startingAirport": starting_airport.upper(),
+                                    "destinationAirport": destination_airport.upper(),
+                                    "totalFare": total_fare,
+                                    "totalTripDuration": trip_duration
+                                }
 
-                            try:
-                                # First add flight
-                                flight_response = requests.post(f"{API_URL}/flights", json=flight_data)
-                                if flight_response.status_code == 200 or flight_response.status_code == 201:
-                                    # Then add segment
-                                    segment_response = requests.post(f"{API_URL}/segments", json=segment_data)
-                                    if segment_response.status_code == 200 or segment_response.status_code == 201:
-                                        st.success(
-                                            f"Successfully added flight from {starting_airport} to {destination_airport}")
+                                segment_data = {
+                                    "originalId": original_id,
+                                    "segmentsAirlineName": airline_name
+                                }
 
-                                        # Display the MongoDB queries instead of raw data
-                                        st.subheader("MongoDB Insert Queries:")
+                                try:
+                                    # First add flight
+                                    flight_response = requests.post(f"{API_URL}/flights", json=flight_data)
+                                    if flight_response.status_code == 200 or flight_response.status_code == 201:
+                                        # Then add segment
+                                        segment_response = requests.post(f"{API_URL}/segments", json=segment_data)
+                                        if segment_response.status_code == 200 or segment_response.status_code == 201:
+                                            st.success(
+                                                f"Successfully added flight from {starting_airport} to {destination_airport}")
 
-                                        # Flight insert query
-                                        flight_insert_query = f"""
-                                                db.flights.insertOne({{
-                                                    originalId: "{original_id}",
-                                                    startingAirport: "{starting_airport.upper()}",
-                                                    destinationAirport: "{destination_airport.upper()}",
-                                                    totalFare: {total_fare},
-                                                    totalTripDuration: {trip_duration}
-                                                }})
-                                                """
-                                        st.code(flight_insert_query, language="javascript")
+                                            # Display the MongoDB queries instead of raw data
+                                            st.subheader("MongoDB Insert Queries:")
 
-                                        # Segment insert query
-                                        segment_insert_query = f"""
-                                                db.flights_segments.insertOne({{
-                                                    originalId: "{original_id}",
-                                                    segmentsAirlineName: "{airline_name}"
-                                                }})
-                                                """
-                                        st.code(segment_insert_query, language="javascript")
+                                            # Flight insert query
+                                            flight_insert_query = f"""
+                                                    db.flights.insertOne({{
+                                                        originalId: "{original_id}",
+                                                        startingAirport: "{starting_airport.upper()}",
+                                                        destinationAirport: "{destination_airport.upper()}",
+                                                        totalFare: {total_fare},
+                                                        totalTripDuration: {trip_duration}
+                                                    }})
+                                                    """
+                                            st.code(flight_insert_query, language="javascript")
 
-                                        st.balloons()
+                                            # Segment insert query
+                                            segment_insert_query = f"""
+                                                    db.flights_segments.insertOne({{
+                                                        originalId: "{original_id}",
+                                                        segmentsAirlineName: "{airline_name}"
+                                                    }})
+                                                    """
+                                            st.code(segment_insert_query, language="javascript")
+
+                                            st.balloons()
+                                        else:
+                                            st.error(f"Error adding segment: {segment_response.text}")
                                     else:
-                                        st.error(f"Error adding segment: {segment_response.text}")
+                                        st.error(f"Error adding flight: {flight_response.text}")
+                                except Exception as e:
+                                    st.error(f"Error connecting to API: {str(e)}")
+
+                else:  # Add multiple flights
+                    st.markdown("### Add Multiple Flights")
+
+                    # Input the number of flights to add
+                    num_flights = st.number_input("Number of flights to add", min_value=2, max_value=10, value=3)
+
+                    # Create form
+                    with st.form("add_multiple_flights_form"):
+                        # List to store all flight data
+                        all_flights_data = []
+
+                        # Create input fields for each flight
+                        for i in range(num_flights):
+                            st.markdown(f"### Flight #{i + 1}")
+
+                            col1, col2 = st.columns(2)
+                            with col1:
+                                original_id = st.text_input(f"Original ID #{i + 1}", key=f"id_{i}")
+                                starting_airport = st.text_input(f"Starting Airport Code #{i + 1}", key=f"start_{i}")
+                                destination_airport = st.text_input(f"Destination Airport Code #{i + 1}",
+                                                                    key=f"dest_{i}")
+                            with col2:
+                                airline_name = st.text_input(f"Airline Name #{i + 1}", key=f"airline_{i}")
+                                total_fare = st.number_input(f"Total Fare ($) #{i + 1}", min_value=0.0, value=100.0,
+                                                             format="%.2f", key=f"fare_{i}")
+                                trip_duration = st.number_input(f"Trip Duration (minutes) #{i + 1}", min_value=0,
+                                                                value=180, key=f"duration_{i}")
+
+                            # Add flight data to the list
+                            all_flights_data.append({
+                                "original_id": original_id,
+                                "starting_airport": starting_airport,
+                                "destination_airport": destination_airport,
+                                "airline_name": airline_name,
+                                "total_fare": total_fare,
+                                "trip_duration": trip_duration
+                            })
+
+                            # Add separator (except after the last flight)
+                            if i < num_flights - 1:
+                                st.markdown("---")
+
+                        # Submit button
+                        submit_button = st.form_submit_button("Add All Flights")
+
+                        if submit_button:
+                            # Validate data for each flight
+                            valid_flights = []
+                            invalid_indices = []
+
+                            for i, flight in enumerate(all_flights_data):
+                                # Check required fields
+                                if flight["original_id"] and flight["starting_airport"] and flight[
+                                    "destination_airport"]:
+                                    valid_flights.append(flight)
                                 else:
-                                    st.error(f"Error adding flight: {flight_response.text}")
-                            except Exception as e:
-                                st.error(f"Error connecting to API: {str(e)}")
+                                    invalid_indices.append(i + 1)
+
+                            if invalid_indices:
+                                # Show flights with missing required fields
+                                st.error(
+                                    f"Flights #{', #'.join(map(str, invalid_indices))} are missing required fields")
+
+                            if valid_flights:
+                                # Display MongoDB insertMany queries that would be executed
+                                st.subheader("Equivalent MongoDB Queries:")
+
+                                # Prepare the insertMany data arrays
+                                mongo_flights_data = []
+                                mongo_segments_data = []
+
+                                for flight in valid_flights:
+                                    mongo_flights_data.append({
+                                        "originalId": flight["original_id"],
+                                        "startingAirport": flight["starting_airport"].upper(),
+                                        "destinationAirport": flight["destination_airport"].upper(),
+                                        "totalFare": flight["total_fare"],
+                                        "totalTripDuration": flight["trip_duration"]
+                                    })
+
+                                    mongo_segments_data.append({
+                                        "originalId": flight["original_id"],
+                                        "segmentsAirlineName": flight["airline_name"]
+                                    })
+
+                                # Format the insertMany queries
+                                flights_insert_query = "db.flights.insertMany(" + json.dumps(mongo_flights_data,
+                                                                                             indent=2) + ")"
+                                segments_insert_query = "db.flights_segments.insertMany(" + json.dumps(
+                                    mongo_segments_data, indent=2) + ")"
+
+                                st.code(flights_insert_query, language="javascript")
+                                st.code(segments_insert_query, language="javascript")
+
+                                # Show progress bar
+                                progress_bar = st.progress(0)
+                                status_placeholder = st.empty()
+
+                                # Track addition results
+                                success_count = 0
+                                failed_flights = []
+
+                                # Add flights one by one
+                                for i, flight in enumerate(valid_flights):
+                                    try:
+                                        # Update progress bar and status text
+                                        progress = (i + 1) / len(valid_flights)
+                                        progress_bar.progress(progress)
+                                        status_placeholder.text(
+                                            f"Adding flight {i + 1} of {len(valid_flights)}: {flight['starting_airport']} to {flight['destination_airport']}")
+
+                                        # Prepare flight data
+                                        flight_data = {
+                                            "originalId": flight["original_id"],
+                                            "startingAirport": flight["starting_airport"].upper(),
+                                            "destinationAirport": flight["destination_airport"].upper(),
+                                            "totalFare": flight["total_fare"],
+                                            "totalTripDuration": flight["trip_duration"]
+                                        }
+
+                                        segment_data = {
+                                            "originalId": flight["original_id"],
+                                            "segmentsAirlineName": flight["airline_name"]
+                                        }
+
+                                        # First add flight
+                                        flight_response = requests.post(f"{API_URL}/flights", json=flight_data)
+
+                                        if flight_response.status_code == 200 or flight_response.status_code == 201:
+                                            # Then add segment
+                                            segment_response = requests.post(f"{API_URL}/segments", json=segment_data)
+
+                                            if segment_response.status_code == 200 or segment_response.status_code == 201:
+                                                success_count += 1
+                                            else:
+                                                failed_flights.append({
+                                                    "route": f"{flight['starting_airport']} to {flight['destination_airport']}",
+                                                    "error": f"Error adding segment: {segment_response.text}"
+                                                })
+                                        else:
+                                            failed_flights.append({
+                                                "route": f"{flight['starting_airport']} to {flight['destination_airport']}",
+                                                "error": f"Error adding flight: {flight_response.text}"
+                                            })
+
+                                    except Exception as e:
+                                        failed_flights.append({
+                                            "route": f"{flight['starting_airport']} to {flight['destination_airport']}",
+                                            "error": str(e)
+                                        })
+
+                                # Clear status text
+                                status_placeholder.empty()
+
+                                # Show addition results
+                                if success_count > 0:
+                                    st.success(f"Successfully added {success_count} of {len(valid_flights)} flights")
+
+                                    # Show balloons effect if all flights were added successfully
+                                    if success_count == len(valid_flights):
+                                        st.balloons()
+
+                                # Show failed flights
+                                if failed_flights:
+                                    st.error(f"Failed to add {len(failed_flights)} flights")
+
+                                    with st.expander("Show failed flights"):
+                                        for failed_flight in failed_flights:
+                                            st.markdown(f"**{failed_flight['route']}**: {failed_flight['error']}")
 
 
             elif flight_operation == "Update Flight":
