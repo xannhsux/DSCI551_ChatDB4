@@ -2,15 +2,23 @@ from fastapi import FastAPI, Query, HTTPException
 from typing import List, Dict, Any, Optional
 import logging
 from pydantic import BaseModel
+import json
+import re
 
 from .mongo_agent import (
     get_all_flights,
     get_flights_by_airports,
     get_flights_by_airline,
     find_with_projection,
+    aggregate,
     insert_one as mongo_insert_one,
     update_one as mongo_update_one,
-    delete_one as mongo_delete_one
+    delete_one as mongo_delete_one,
+    join_flight_data,
+    get_client,
+    db,
+    convert_objectid_to_str,
+    MONGO_COLLECTIONS
 )
 from .sql_agent import (
     get_all_reviews,
@@ -28,7 +36,8 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 app = FastAPI(title="Travel Database API")
-
+class MongoQueryModel(BaseModel):
+    query: str
 
 @app.get("/", response_model=Dict[str, str])
 def read_root():
@@ -80,13 +89,13 @@ def get_flights_by_airline_name(
         raise HTTPException(status_code=500, detail=f"Error retrieving flights: {str(e)}")
 
 
-@app.get("/flights/segments", response_model=List[Dict[str, Any]])
+@app.get("/segments", response_model=List[Dict[str, Any]])
 def get_flight_segments(limit: int = 10):
     """
     Get flight segments data
     """
     try:
-        segments = find_with_projection("flights_segments", {}, None, limit)
+        segments = find_with_projection("segments", {}, None, limit)
         return segments
     except Exception as e:
         logger.error(f"Error retrieving flight segments: {e}")
@@ -322,6 +331,18 @@ class SegmentModel(BaseModel):
     segmentsAirlineName: str
 
 
+class FlightQueryModel(BaseModel):
+    collection: str
+    query: str
+
+
+class EnhancedQueryModel(BaseModel):
+    collection: str = "flights"
+    filter: Dict[str, Any] = {}
+    sort: Optional[Dict[str, int]] = None
+    limit: int = 20
+
+
 @app.post("/flights", status_code=201)
 async def create_flight(flight: FlightModel):
     """Add a new flight to the database"""
@@ -423,55 +444,100 @@ async def delete_segment(original_id: str):
     return {"success": True, "message": f"Segment with ID {original_id} deleted if it existed"}
 
 
+
 @app.post("/execute_mongo_query")
-async def execute_mongo_query(query_data: Dict[str, Any]):
-    """Execute a MongoDB query"""
+async def execute_mongo_query(query_data: MongoQueryModel):
+    """Execute a MongoDB query from a query string"""
     try:
-        collection = query_data.get("collection", "flights")
-        query_string = query_data.get("query", "db.flights.find({}).limit(10)")
+        query_string = query_data.query
 
-        # Extract the query part from the string
-        import re
+        logger.info(f"Executing MongoDB query: {query_string}")
 
-        if "flights_segments" in query_string or collection == "segments":
-            collection_name = "segments"
-        else:
+        # Extract collection name
+        collection_match = re.search(r'db\.(\w+)\.', query_string)
+        collection_name = collection_match.group(1) if collection_match else "flights"
+
+        # Check if the collection is valid
+        if collection_name not in ["flights", "segments"]:
             collection_name = "flights"
 
-        # Extract query parameters - this is a simplified version
+        # Extract query parameters
         query_params = {}
-        sort_params = None
+        query_params_match = re.search(r'find\(\s*(\{.*?\})\s*\)', query_string)
 
-        # Check for find pattern
-        find_pattern = r'find\(\s*(\{.*?\})\s*\)'
-        find_match = re.search(find_pattern, query_string)
-        if find_match:
-            query_json = find_match.group(1)
+        if query_params_match:
+            params_str = query_params_match.group(1)
+            # Replace single quotes with double quotes for valid JSON
+            params_str = params_str.replace("'", '"')
+
             try:
-                import json
-                query_params = json.loads(query_json)
-            except:
-                # If parsing fails, use empty query
+                query_params = json.loads(params_str)
+            except json.JSONDecodeError:
+                logger.error(f"Failed to parse query parameters: {params_str}")
                 query_params = {}
 
-        # Check for sort pattern
-        sort_pattern = r'sort\(\s*(\{.*?\})\s*\)'
-        sort_match = re.search(sort_pattern, query_string)
-        if sort_match:
-            sort_json = sort_match.group(1)
+        # Extract limit
+        limit_val = 100  # Default limit
+        limit_match = re.search(r'\.limit\((\d+)\)', query_string)
+        if limit_match:
             try:
-                import json
-                sort_params = json.loads(sort_json)
-            except:
-                sort_params = None
+                limit_val = int(limit_match.group(1))
+            except ValueError:
+                limit_val = 100
 
-        # Get results based on collection
-        if collection_name == "segments":
-            results = find_with_projection("segments", query_params, limit=50)
-        else:
-            results = find_with_projection("flights", query_params, limit=50)
+        # Handle specific query cases
+        if collection_name == "flights":
+            # Check for airport filters
+            if "startingAirport" in query_params and "destinationAirport" in query_params:
+                starting = query_params["startingAirport"]
+                destination = query_params["destinationAirport"]
+                flights = get_flights_by_airports(starting, destination)
+                return flights[:limit_val]
 
-        return results
+            # Check for airline filters
+            airline_filter = False
+            if "segmentsAirlineName" in query_params:
+                airline_filter = True
+                if isinstance(query_params["segmentsAirlineName"], dict) and "$regex" in query_params[
+                    "segmentsAirlineName"]:
+                    airline = query_params["segmentsAirlineName"]["$regex"]
+                    flights = get_flights_by_airline(airline)
+                    return flights[:limit_val]
+
+            # Default query
+            flights = find_with_projection(collection_name, query_params, None, limit_val)
+
+            # Enrich with airline info if needed
+            for flight in flights:
+                if "originalId" in flight and "segmentsAirlineName" not in flight:
+                    segments = find_with_projection("segments", {"originalId": flight["originalId"]})
+                    if segments:
+                        flight["segmentsAirlineName"] = segments[0].get("segmentsAirlineName", "N/A")
+
+            return flights
+
+        elif collection_name == "segments":
+            # Get segments
+            segments = find_with_projection(collection_name, query_params, None, limit_val)
+
+            # If looking for specific airline, enhance with flight data
+            if "segmentsAirlineName" in query_params:
+                enhanced_results = []
+
+                for segment in segments:
+                    if "originalId" in segment:
+                        flight_data = find_with_projection("flights", {"originalId": segment["originalId"]})
+                        if flight_data:
+                            combined = flight_data[0].copy()
+                            combined["segmentsAirlineName"] = segment.get("segmentsAirlineName", "N/A")
+                            enhanced_results.append(combined)
+                        else:
+                            enhanced_results.append(segment)
+
+                return enhanced_results[:limit_val]
+
+            return segments
+
     except Exception as e:
         logger.error(f"Error executing MongoDB query: {e}")
         raise HTTPException(status_code=500, detail=f"Error executing MongoDB query: {str(e)}")

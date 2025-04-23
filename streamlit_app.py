@@ -16,6 +16,7 @@ SQLITE_DB_DIR = "./data"
 LOCATION_DB_PATH = os.path.join(SQLITE_DB_DIR, "hotel_location.db")
 RATE_DB_PATH = os.path.join(SQLITE_DB_DIR, "hotel_rate.db")
 API_URL = os.environ.get("API_URL", "http://backend:8000")
+OLLAMA_API = os.environ.get("OLLAMA_HOST", "http://ollama:11434")
 
 # Initialize session state variables if they don't exist
 if 'query' not in st.session_state:
@@ -23,42 +24,51 @@ if 'query' not in st.session_state:
 if 'query_type' not in st.session_state:
     st.session_state.query_type = "sql"
 
-# Function to format flight data for display
 def format_flights_as_df(flights):
-    """Format flight data as pandas DataFrame for display"""
+    """
+    Format flight data as pandas DataFrame for display
+    
+    Args:
+        flights: List of flight dictionaries
+        
+    Returns:
+        Pandas DataFrame with formatted flight data
+    """
     if not flights:
         return pd.DataFrame()
-
+    
     # Create a list of dictionaries with standardized fields
     formatted_flights = []
+    
+    # Don't try to fetch individual segment data since it's causing 404 errors
+    # Instead, use the airline information if available directly in the flight data
+    
     for flight in flights:
-        # Extract airline name - check multiple possible sources
-        airline_name = "N/A"
-
-        # Check if segmentDetails is available as an array
-        if "segmentDetails" in flight and flight["segmentDetails"] and len(flight["segmentDetails"]) > 0:
-            for segment in flight["segmentDetails"]:
-                if isinstance(segment, dict) and "segmentsAirlineName" in segment:
-                    airline_name = segment["segmentsAirlineName"]
-                    break
-
-        # Check if segmentsAirlineName is directly in the flight object
-        elif "segmentsAirlineName" in flight:
-            airline_name = flight["segmentsAirlineName"]
-
-        # Check if airline_name is directly in the flight object (might be set during update)
-        elif "airline_name" in flight:
-            airline_name = flight["airline_name"]
-
+        # Get airline information from segmentsAirlineName if available
+        airline = flight.get("segmentsAirlineName", "N/A")
+        
+        # If we have multiple airlines separated by "||", format them nicely
+        if airline != "N/A" and "||" in airline:
+            airline = airline.replace("||", " / ")
+        
+        # Format price with dollar sign
+        price = flight.get("totalFare", "N/A")
+        if price != "N/A":
+            price = f"${price}"
+        
+        # Handle duration format
+        duration = flight.get("totalTripDuration", flight.get("travelDuration", "N/A"))
+        
         formatted_flights.append({
             "Departure Airport": flight.get("startingAirport", "N/A"),
             "Destination Airport": flight.get("destinationAirport", "N/A"),
-            "Airline": airline_name,
-            "Price": f"${flight.get('totalFare', 'N/A')}",
-            "Duration (min)": flight.get("totalTripDuration", "N/A")
+            "Airline": airline,
+            "Price": price,
+            "Duration (min)": duration
         })
-
+    
     return pd.DataFrame(formatted_flights)
+
 
 # Function to process natural language queries for flights
 def process_flight_nl_query(nl_query):
@@ -242,36 +252,319 @@ def generate_sql_query(natural_query):
     LIMIT 10
     """
 
-# Generate MongoDB query function (simplified version)
-def generate_mongo_query(natural_query):
-    query_lower = natural_query.lower()
+# Generate MongoDB query function
+# Function to call Ollama API for generating MongoDB queries from natural language
+def generate_mongo_query(natural_language_query):
+    """
+    Generate MongoDB query from natural language using Ollama API
 
-    # Check for schema requests
-    if "select * from" in query_lower or "schema" in query_lower or "show collection" in query_lower:
-        if "segments" in query_lower:
-            return """db.flights_segments.find({}).limit(50)"""
+    Args:
+        natural_language_query (str): The natural language query from the user
+
+    Returns:
+        str: The generated MongoDB query
+    """
+    try:
+        # Create a more effective prompt with examples
+        prompt = f"""
+        You are a MongoDB query generator. Your task is to convert natural language queries into MongoDB queries for a flight database.
+
+        Natural Language Query: "{natural_language_query}"
+
+        Database Structure:
+        - flights_basic collection: contains fields startingAirport, destinationAirport, totalFare, travelDuration
+        - flights_segments collection: contains fields originalId, segmentsAirlineName
+
+        Example Conversions:
+        - "Find flights from SFO" → db.flights_basic.find({{"startingAirport": "SFO"}}).limit(20)
+        - "Show Delta Airlines flights" → db.flights_segments.find({{"segmentsAirlineName": {{"$regex": "Delta", "$options": "i"}}}}).limit(20)
+        - "Find flights from LAX to JFK" → db.flights_basic.find({{"startingAirport": "LAX", "destinationAirport": "JFK"}}).limit(20)
+        - "What are the cheapest flights?" → db.flights_basic.find({{}}).sort({{"totalFare": 1}}).limit(20)
+
+        Return ONLY the valid MongoDB query, no explanation.
+        """
+
+        # Call Ollama API with optimized parameters
+        response = requests.post(
+            f"{OLLAMA_API}/api/generate",
+            json={
+                "model": "llama3",  # Use llama3 as shown in the logs
+                "prompt": prompt,
+                "stream": False,
+                "temperature": 0.1,  # Low temperature for more predictable results
+                "top_p": 0.9,  # Focus on more likely tokens
+                "stop": ["\n", ";"]  # Stop generation at newlines or semicolons
+            }
+        )
+
+        if response.status_code == 200:
+            result = response.json()
+            generated_query = result.get("response", "").strip()
+
+            # Clean up the generated query
+            # Remove any markdown code block formatting
+            generated_query = generated_query.replace("```javascript", "").replace("```", "").strip()
+
+            # Basic validation of the generated query
+            if not generated_query.startswith("db."):
+                # If no valid query was generated, create a basic query
+                st.warning("The model didn't generate a valid MongoDB query. Using a default query.")
+                generated_query = "db.flights_basic.find({}).limit(20)"
+
+            # Make sure it has a limit
+            if "limit" not in generated_query:
+                # Add limit before the closing parenthesis if not present
+                if generated_query.endswith(")"):
+                    generated_query = generated_query[:-1] + ".limit(20))"
+                else:
+                    generated_query = generated_query + ".limit(20)"
+
+            return generated_query
         else:
-            return """db.flights.find({}).limit(50)"""
+            st.error(f"Error calling Ollama API: {response.status_code} - {response.text}")
+            return "db.flights_basic.find({}).limit(20)"  # Default fallback query
 
-    # Check for specific queries
-    if "lax" in query_lower and "jfk" in query_lower:
-        return """db.flights.find({
-            "startingAirport": "LAX", 
-            "destinationAirport": "JFK" 
-        }).sort({ "totalFare": 1 })"""
-    elif "delta" in query_lower:
-        return """db.flights_segments.find({
-            "segmentsAirlineName": { "$regex": "Delta", "$options": "i" }
-        })"""
-    elif "cheapest" in query_lower:
-        return """db.flights.find({}).sort({ "totalFare": 1 }).limit(20)"""
-    elif "sfo" in query_lower:
-        return """db.flights.find({
-            "startingAirport": "SFO"
-        })"""
+    except Exception as e:
+        st.error(f"Error generating MongoDB query: {str(e)}")
+        return "db.flights_basic.find({}).limit(20)"  # Default fallback query
 
-    # Default query
-    return """db.flights.find({}).limit(10)"""
+
+# Function to parse the MongoDB query into components for API call
+def parse_mongo_query(query_string):
+    """
+    Parse a MongoDB query string into components needed for API call
+
+    Args:
+        query_string (str): The MongoDB query string
+
+    Returns:
+        tuple: (query_type, params, mongo_query)
+    """
+    # Default values
+    query_type = "mongo_query"  # Use mongo_query as type for direct execution
+    params = {"limit": 20, "mongo_query": query_string}  # Include original query string
+
+    try:
+        # Extract collection name
+        collection_match = re.search(r'db\.(\w+)\.', query_string)
+        collection = collection_match.group(1) if collection_match else "flights_basic"
+
+        # Map collection names to match backend expectations
+        if collection == "flights_basic":
+            # Update the query to use "flights" instead
+            query_string = query_string.replace("db.flights_basic", "db.flights")
+            params["mongo_query"] = query_string
+            collection = "flights"
+        elif collection == "flights_segments":
+            # Update the query to use "segments" instead
+            query_string = query_string.replace("db.flights_segments", "db.segments")
+            params["mongo_query"] = query_string
+            collection = "segments"
+
+        # Extract query parameters
+        query_params_match = re.search(r'find\(\s*(\{.*?\})\s*\)', query_string)
+        query_params = {}
+
+        if query_params_match:
+            # Try to parse the query parameters
+            params_str = query_params_match.group(1)
+
+            # Handle advanced regex patterns in the query
+            # Replace any single quotes with double quotes for valid JSON
+            params_str = params_str.replace("'", '"')
+
+            try:
+                query_params = json.loads(params_str)
+            except json.JSONDecodeError:
+                # If we can't parse the JSON, try to extract keys and values manually
+                st.warning(f"Could not parse query parameters as JSON: {params_str}")
+                query_params = {}
+
+        # Extract limit
+        limit_match = re.search(r'\.limit\((\d+)\)', query_string)
+        limit = int(limit_match.group(1)) if limit_match else 20
+        params["limit"] = limit
+
+        # Determine query type based on parameters - this helps our API routing
+        if "startingAirport" in query_params and "destinationAirport" in query_params:
+            query_type = "by_airports"
+            params["starting"] = query_params["startingAirport"]
+            params["destination"] = query_params["destinationAirport"]
+        elif "segmentsAirlineName" in query_params or collection == "segments":
+            query_type = "by_airline"
+            # Try to extract airline name from regex pattern if present
+            if isinstance(query_params.get("segmentsAirlineName"), dict):
+                regex = query_params["segmentsAirlineName"].get("$regex", "")
+                params["airline"] = regex
+            else:
+                params["airline"] = query_params.get("segmentsAirlineName", "")
+
+        # Add collection name to params
+        params["collection"] = collection
+
+        return query_type, params, query_string
+
+    except Exception as e:
+        st.error(f"Error parsing MongoDB query: {str(e)}")
+        return "mongo_query", {"limit": 20, "mongo_query": query_string, "collection": "flights"}, query_string
+
+
+def execute_mongo_query(query_string):
+    """
+    Execute a MongoDB query directly against the flights database
+
+    Args:
+        query_string (str): MongoDB query string (e.g., "db.flights.find({}).limit(10)")
+
+    Returns:
+        list: Results of the query
+    """
+    # Extract collection name from the query
+    import re
+    from pymongo import MongoClient
+
+    # Connect to MongoDB
+    client = MongoClient('mongodb://localhost:27017/')
+    db = client['flights']  # Connect to flights database
+
+    # Extract collection name from query
+    collection_match = re.search(r'db\.(\w+)\.', query_string)
+    collection_name = collection_match.group(1) if collection_match else "flights"
+
+    # Map collection names to actual collections in database
+    if collection_name == "flights_basic":
+        collection = db['flights']
+    elif collection_name == "flights_segments":
+        collection = db['segments']
+    else:
+        collection = db[collection_name]
+
+    # Extract query parameters using regex
+    find_pattern = r'find\(\s*(\{.*?\})\s*\)'
+    find_match = re.search(find_pattern, query_string)
+
+    if find_match:
+        query_json = find_match.group(1)
+        import json
+        query_params = json.loads(query_json)
+    else:
+        query_params = {}
+
+    # Extract limit if present
+    limit_pattern = r'\.limit\((\d+)\)'
+    limit_match = re.search(limit_pattern, query_string)
+    limit = int(limit_match.group(1)) if limit_match else 100
+
+    # Extract sort if present
+    sort_pattern = r'\.sort\(\s*(\{.*?\})\s*\)'
+    sort_match = re.search(sort_pattern, query_string)
+
+    if sort_match:
+        sort_json = sort_match.group(1)
+        sort_params = json.loads(sort_json)
+
+        # Get the field name and sort order
+        sort_field = list(sort_params.keys())[0]
+        sort_order = sort_params[sort_field]
+
+        # Execute find with sort and limit
+        results = list(collection.find(query_params).sort(sort_field, sort_order).limit(limit))
+    else:
+        # Execute find with just limit
+        results = list(collection.find(query_params).limit(limit))
+
+    # Close connection
+    client.close()
+
+    # Convert ObjectIds to strings for JSON serialization
+    from bson import json_util
+    return json.loads(json_util.dumps(results))
+
+
+def get_flights_by_direct_api(query_type, params=None):
+    """
+    Directly query backend API endpoints instead of using MongoDB query execution
+    """
+    if params is None:
+        params = {}
+
+    try:
+        # Handle direct MongoDB query execution
+        if query_type == "mongo_query" and "mongo_query" in params:
+            # Execute the MongoDB query directly through our new endpoint
+            payload = {
+                "collection": params.get("collection", "flights"),
+                "query": params["mongo_query"]
+            }
+            response = requests.post(
+                f"{API_URL}/execute_mongo_query",
+                json=payload
+            )
+            if st.sidebar.checkbox("Show Debug Info", key="debug_info_mongo"):
+                st.write(f"Debug: Using /execute_mongo_query endpoint with query: {params['mongo_query']}")
+
+            if response.status_code == 200:
+                flights = response.json()
+                return flights
+            else:
+                st.error(f"API Error: {response.status_code} - {response.text}")
+                return []
+
+        # Select the appropriate endpoint based on query type
+        if query_type == "by_airports" and "starting" in params and "destination" in params:
+            # Add a limit parameter to avoid performance issues
+            limit = params.get("limit", 20)
+
+            # Query for flights between specific airports
+            response = requests.get(
+                f"{API_URL}/flights/airports",
+                params={
+                    "starting": params["starting"],
+                    "destination": params["destination"],
+                    "limit": limit  # Add limit to query parameters
+                }
+            )
+            if st.sidebar.checkbox("Show Debug Info", key="debug_info_airports"):
+                st.write(f"Debug: Using /flights/airports endpoint with params: {{'starting': '{params['starting']}', 'destination': '{params['destination']}', 'limit': {limit}}}")
+
+        elif query_type == "by_airline" and "airline" in params:
+            # Add a limit parameter to avoid performance issues
+            limit = params.get("limit", 20)
+
+            # Query for flights by airline
+            response = requests.get(
+                f"{API_URL}/flights/airline",
+                params={"airline": params["airline"], "limit": limit}
+            )
+            if st.sidebar.checkbox("Show Debug Info", key="debug_info_airline"):
+                st.write(f"Debug: Using /flights/airline endpoint with params: {{'airline': '{params['airline']}', 'limit': {limit}}}")
+
+        else:
+            # Default to getting all flights with limit
+            limit = params.get("limit", 20)
+            response = requests.get(f"{API_URL}/flights", params={"limit": limit})
+            if st.sidebar.checkbox("Show Debug Info", key="debug_info_all"):
+                st.write(f"Debug: Using /flights endpoint with limit: {limit}")
+
+        if response.status_code == 200:
+            flights = response.json()
+            result_count = len(flights)
+            if st.sidebar.checkbox("Show Debug Info", key="debug_info_results"):
+                st.write(f"Debug: Received {result_count} flights from API")
+
+            # If we got too many results, limit them to avoid performance issues
+            if result_count > 100:
+                st.warning(f"Found {result_count} matching flights. Showing first 100 results.")
+                flights = flights[:100]  # Limit to first 100 flights
+
+            return flights
+        else:
+            st.error(f"API Error: {response.status_code} - {response.text}")
+            return []
+
+    except Exception as e:
+        st.error(f"Error querying API: {str(e)}")
+        return []
 
 # Handle HTTP errors with custom message and status code
 def handle_api_error(response, operation="query"):
@@ -369,61 +662,148 @@ with tab1:
     if execute_button and nl_query:
         with st.spinner("Processing query..."):
             if query_type == "SQL (Hotel Database)":
-                # Generate SQL query
+                # Process SQL query for hotels
                 sql_query = generate_sql_query(nl_query)
 
                 st.subheader("Generated SQL Query:")
                 st.code(sql_query, language="sql")
 
-                try:
-                    # Connect to SQLite and execute query
-                    conn = sqlite3.connect(LOCATION_DB_PATH)
-                    result_df = pd.read_sql_query(sql_query, conn)
-                    conn.close()
+                # Extract key parameters
+                county = None
+                state = None
+                min_rating = None
 
-                    # Display results
-                    st.subheader("Query Results:")
-                    st.dataframe(result_df)
-                    st.success(f"Query executed successfully. Found {len(result_df)} results.")
-                except Exception as e:
-                    st.error(f"Error executing SQL query: {str(e)}")
-            else:
-                # Generate MongoDB query
-                mongo_query = generate_mongo_query(nl_query)
+                # Check for county in query
+                county_match = re.search(r'WHERE\s+h\.county\s*=\s*\'([^\']+)\'', sql_query)
+                if county_match:
+                    county = county_match.group(1)
 
-                st.subheader("Generated MongoDB Query:")
-                st.code(mongo_query, language="javascript")
+                # Check for state in query
+                state_match = re.search(r'WHERE\s+h\.state\s*=\s*\'([^\']+)\'', sql_query)
+                if not state_match:
+                    state_match = re.search(r'AND\s+h\.state\s*=\s*\'([^\']+)\'', sql_query)
+                if state_match:
+                    state = state_match.group(1)
 
-                try:
-                    # Extract collection name and query part
-                    if "flights_segments" in mongo_query:
-                        collection = "segments"
-                    else:
-                        collection = "flights"
+                # Check for rating in query
+                rating_match = re.search(r'WHERE\s+r\.rating\s*>=\s*(\d+\.?\d*)', sql_query)
+                if not rating_match:
+                    rating_match = re.search(r'AND\s+r\.rating\s*>=\s*(\d+\.?\d*)', sql_query)
+                if rating_match:
+                    min_rating = float(rating_match.group(1))
 
-                    # Call API to execute MongoDB query
-                    response = requests.post(f"{API_URL}/execute_mongo_query",
-                                             json={"collection": collection, "query": mongo_query})
+                # Query hotels with extracted parameters
+                with st.spinner("Querying hotels..."):
+                    status, hotels = process_hotel_nl_query(county, state, min_rating)
 
-                    if response.status_code == 200:
-                        results = response.json()
-
-                        # Display results
+                    if "Success" in status:
                         st.subheader("Query Results:")
-                        if results:
-                            formatted_results = format_flights_as_df(results)
-                            st.dataframe(formatted_results)
-                            st.success(f"Query executed successfully. Found {len(results)} results.")
+                        #hotels_df = format_hotels_as_df(hotels)
+                        #st.dataframe(hotels_df)
+                        st.success(f"Query executed successfully. Found {len(hotels)} results.")
 
-                            # Option to show raw data
-                            if st.checkbox("Show raw data"):
-                                st.json(results)
-                        else:
-                            st.info("No results found for this query.")
+                        # Option to show raw data
+                        if st.checkbox("Show raw hotel data", key="hotel_raw_data"):
+                            st.json(hotels)
                     else:
-                        st.error(handle_api_error(response, "query"))
-                except Exception as e:
-                    st.error(f"Error executing MongoDB query: {str(e)}")
+                        st.error(status)
+
+
+
+            # In your streamlit_app.py file - modify the MongoDB query execution part
+
+            # MongoDB (Flight Database) section
+
+            else:  # MongoDB (Flight Database)
+
+                # Generate MongoDB query using Ollama
+
+                with st.spinner("Generating MongoDB query using Ollama..."):
+
+                    mongo_query = generate_mongo_query(nl_query)
+
+                    st.subheader("Generated MongoDB Query:")
+
+                    st.code(mongo_query, language="javascript")
+
+                    # Get flights directly from API using the Ollama-generated query
+
+                    with st.spinner("Executing MongoDB query..."):
+
+                        try:
+
+                            # Create appropriate API request payload
+
+                            payload = {
+
+                                "query": mongo_query
+
+                            }
+
+                            # Debug the payload being sent
+
+                            st.write("Debug - Sending payload:", payload)
+
+                            # Set a timeout for the request
+
+                            response = requests.post(
+
+                                f"{API_URL}/execute_mongo_query",
+
+                                json=payload,
+
+                                timeout=30  # Add a timeout in seconds
+
+                            )
+
+                            # Debug the response
+
+                            st.write(f"Debug - Response status: {response.status_code}")
+
+                            if response.status_code == 200:
+
+                                # Successfully got results
+
+                                flights = response.json()
+
+                                # Display results
+
+                                if flights:
+
+                                    st.subheader("Query Results:")
+
+                                    formatted_results = format_flights_as_df(flights)
+
+                                    st.dataframe(formatted_results)
+
+                                    st.success(f"Query executed successfully. Found {len(flights)} results.")
+
+                                    # Allow viewing raw data
+
+                                    if st.checkbox("Show raw flight data", key="flight_raw_data"):
+                                        st.json(flights)
+
+                                else:
+
+                                    st.info("No results found for this query.")
+
+                            else:
+
+                                st.error(f"API Error: {response.status_code} - {response.text}")
+
+                        except requests.exceptions.Timeout:
+
+                            st.error("The request timed out. The query might be too complex or the server is busy.")
+
+                        except Exception as e:
+
+                            st.error(f"Error executing query: {str(e)}")
+
+                            st.info("Check the backend logs for more details.")
+
+    else:
+        if execute_button:
+            st.warning("Please enter a query.")
 
 # Database Schema tab
 with tab2:
