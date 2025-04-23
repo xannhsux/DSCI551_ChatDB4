@@ -129,7 +129,7 @@ def process_hotel_nl_query(nl_query):
     # Generate appropriate SQL query based on extracted parameters
     if "county" in params and "state" in params and "min_rating" in params:
         sql_query = f"""
-        SELECT h.hotel_name, h.county, h.state, r.rating, r.cleanliness, r.service, r."sleep quality", r.rooms
+        SELECT h.hotel_name, h.county, h.state, r.rating, r.cleanliness, r.service, r.rooms
         FROM hotel_complete_view h
         JOIN rate_complete_view r ON h.ID = r.ID
         WHERE h.county = '{params["county"]}' AND h.state = '{params["state"]}' AND r.rating >= {params["min_rating"]}
@@ -137,7 +137,7 @@ def process_hotel_nl_query(nl_query):
         """
     elif "county" in params and "state" in params:
         sql_query = f"""
-        SELECT h.hotel_name, h.county, h.state, r.rating, r.cleanliness, r.service, r."sleep quality", r.rooms
+        SELECT h.hotel_name, h.county, h.state, r.rating, r.cleanliness, r.service, r.rooms
         FROM hotel_complete_view h
         JOIN rate_complete_view r ON h.ID = r.ID
         WHERE h.county = '{params["county"]}' AND h.state = '{params["state"]}'
@@ -145,7 +145,7 @@ def process_hotel_nl_query(nl_query):
         """
     elif "county" in params:
         sql_query = f"""
-        SELECT h.hotel_name, h.county, h.state, r.rating, r.cleanliness, r.service, r."sleep quality", r.rooms
+        SELECT h.hotel_name, h.county, h.state, r.rating, r.cleanliness, r.service, r.rooms
         FROM hotel_complete_view h
         JOIN rate_complete_view r ON h.ID = r.ID
         WHERE h.county = '{params["county"]}'
@@ -153,7 +153,7 @@ def process_hotel_nl_query(nl_query):
         """
     elif "state" in params:
         sql_query = f"""
-        SELECT h.hotel_name, h.county, h.state, r.rating, r.cleanliness, r.service, r."sleep quality", r.rooms
+        SELECT h.hotel_name, h.county, h.state, r.rating, r.cleanliness, r.service, r.rooms
         FROM hotel_complete_view h
         JOIN rate_complete_view r ON h.ID = r.ID
         WHERE h.state = '{params["state"]}'
@@ -161,7 +161,7 @@ def process_hotel_nl_query(nl_query):
         """
     elif "min_rating" in params:
         sql_query = f"""
-        SELECT h.hotel_name, h.county, h.state, r.rating, r.cleanliness, r.service, r."sleep quality", r.rooms
+        SELECT h.hotel_name, h.county, h.state, r.rating, r.cleanliness, r.service, r.rooms
         FROM hotel_complete_view h
         JOIN rate_complete_view r ON h.ID = r.ID
         WHERE r.rating >= {params["min_rating"]}
@@ -169,7 +169,7 @@ def process_hotel_nl_query(nl_query):
         """
     else:
         sql_query = """
-        SELECT h.hotel_name, h.county, h.state, r.rating, r.cleanliness, r.service, r."sleep quality", r.rooms
+        SELECT h.hotel_name, h.county, h.state, r.rating, r.cleanliness, r.service, r.rooms
         FROM hotel_complete_view h
         JOIN rate_complete_view r ON h.ID = r.ID
         ORDER BY r.rating DESC
@@ -194,7 +194,7 @@ def generate_sql_query(natural_query):
             """
         else:
             return """
-            SELECT h.ID, h.hotel_name, h.county, h.state, r.rating, r.cleanliness, r.service, r."sleep quality", r.rooms
+            SELECT h.ID, h.hotel_name, h.county, h.state, r.rating, r.cleanliness, r.service, r.rooms
             FROM hotel_complete_view h
             JOIN rate_complete_view r ON h.ID = r.ID
             LIMIT 50
@@ -203,7 +203,7 @@ def generate_sql_query(natural_query):
     # Check for specific queries
     if "orange county" in query_lower:
         return """
-        SELECT h.hotel_name, h.county, h.state, r.rating, r.cleanliness, r.service, r."sleep quality", r.rooms
+        SELECT h.hotel_name, h.county, h.state, r.rating, r.cleanliness, r.service, r.rooms
         FROM hotel_complete_view h
         JOIN rate_complete_view r ON h.ID = r.ID
         WHERE h.county = 'Orange'
@@ -211,7 +211,7 @@ def generate_sql_query(natural_query):
         """
     elif "california" in query_lower:
         return """
-        SELECT h.hotel_name, h.county, h.state, r.rating, r.cleanliness, r.service, r."sleep quality", r.rooms
+        SELECT h.hotel_name, h.county, h.state, r.rating, r.cleanliness, r.service, r.rooms
         FROM hotel_complete_view h
         JOIN rate_complete_view r ON h.ID = r.ID
         WHERE h.state = 'CA'
@@ -219,7 +219,7 @@ def generate_sql_query(natural_query):
         """
     elif "best rating" in query_lower or "highest rating" in query_lower:
         return """
-        SELECT h.hotel_name, h.county, h.state, r.rating, r.cleanliness, r.service, r."sleep quality", r.rooms
+        SELECT h.hotel_name, h.county, h.state, r.rating, r.cleanliness, r.service, r.rooms
         FROM hotel_complete_view h
         JOIN rate_complete_view r ON h.ID = r.ID
         ORDER BY r.rating DESC
@@ -227,24 +227,16 @@ def generate_sql_query(natural_query):
         """
     elif "cleanliness" in query_lower:
         return """
-        SELECT h.hotel_name, h.county, h.state, r.rating, r.cleanliness, r.service, r."sleep quality", r.rooms
+        SELECT h.hotel_name, h.county, h.state, r.rating, r.cleanliness, r.service, r.rooms
         FROM hotel_complete_view h
         JOIN rate_complete_view r ON h.ID = r.ID
         ORDER BY r.cleanliness DESC
         LIMIT 20
         """
-    elif "sleep quality" in query_lower:
-        return """
-        SELECT h.hotel_name, h.county, h.state, r.rating, r.cleanliness, r.service, r."sleep quality", r.rooms
-        FROM hotel_complete_view h
-        JOIN rate_complete_view r ON h.ID = r.ID
-        ORDER BY r."sleep quality" DESC
-        LIMIT 20
-        """
 
     # Default query
     return """
-    SELECT h.hotel_name, h.county, h.state, r.rating, r.cleanliness, r.service, r."sleep quality", r.rooms
+    SELECT h.hotel_name, h.county, h.state, r.rating, r.cleanliness, r.service, r.rooms
     FROM hotel_complete_view h
     JOIN rate_complete_view r ON h.ID = r.ID
     LIMIT 10
@@ -316,8 +308,7 @@ with tab1:
         hotel_examples = [
             "Show me hotels in Orange County with ratings above 4.5",
             "Find hotels with the best cleanliness ratings",
-            "What are the top rated hotels in California?",
-            "Show me hotels with good sleep quality"
+            "What are the top rated hotels in California?"
         ]
 
         for ex in hotel_examples:
@@ -461,7 +452,6 @@ with tab2:
             - rating (REAL): Overall rating (1-5)
             - cleanliness (REAL): Cleanliness rating (1-5)
             - service (REAL): Service rating (1-5)
-            - sleep quality (REAL): Sleep quality rating (1-5)
             - rooms (REAL): Room quality rating (1-5)
             """)
 
@@ -597,7 +587,6 @@ with tab3:
                     service = st.slider("Service", min_value=1.0, max_value=5.0, value=3.0, step=0.5)
 
                 rooms = st.slider("Rooms", min_value=1.0, max_value=5.0, value=3.0, step=0.5)
-                sleep_quality = st.slider("Sleep Quality", min_value=1.0, max_value=5.0, value=3.0, step=0.5)
 
                 submit_button = st.form_submit_button("Add Hotel")
 
@@ -612,230 +601,462 @@ with tab3:
                             "rating": rating,
                             "cleanliness": cleanliness,
                             "service": service,
-                            "rooms": rooms,
-                            "sleep quality": sleep_quality
+                            "rooms": rooms
                         }
 
                         try:
                             response = requests.post(f"{API_URL}/hotels", json=hotel_data)
                             if response.status_code == 200 or response.status_code == 201:
                                 st.success(f"Successfully added hotel: {hotel_name}")
-                                
-                                # Display the SQL query that would be executed
-                                st.subheader("Equivalent SQL Query:")
-                                sql_insert = f"""
-                                -- Insert into hotel_complete_view
-                                INSERT INTO hotel_complete_view (hotel_name, county, state)
-                                VALUES ('{hotel_name}', '{county}', '{state.upper()}');
-                                
-                                -- Insert into rate_complete_view (assuming last_insert_rowid() for ID)
-                                INSERT INTO rate_complete_view (ID, rating, cleanliness, service, rooms, "sleep quality")
-                                VALUES (last_insert_rowid(), {rating}, {cleanliness}, {service}, {rooms}, {sleep_quality});
+
+                                # Display the SQL queries that would be executed
+                                st.subheader("Equivalent SQL Queries:")
+
+                                # Get the hotel_id from the response if available
+                                hotel_id = "new_id"
+                                try:
+                                    response_data = response.json()
+                                    if "id" in response_data:
+                                        hotel_id = response_data["id"]
+                                except:
+                                    pass
+
+                                # Display the insert queries
+                                hotel_name_insert = f"""
+                                -- Insert into hotel_name1
+                                INSERT INTO hotel_name1 (hotel_name) VALUES ('{hotel_name}');
                                 """
-                                st.code(sql_insert, language="sql")
-                                
+                                st.code(hotel_name_insert, language="sql")
+
+                                location_insert = f"""
+                                -- Insert into location
+                                INSERT INTO location (ID, county, state) 
+                                VALUES ({hotel_id}, '{county}', '{state.upper()}');
+                                """
+                                st.code(location_insert, language="sql")
+
+                                rating_insert = f"""
+                                -- Insert into rate
+                                INSERT INTO rate (ID, rating, service, rooms, cleanliness)
+                                VALUES ({hotel_id}, {rating}, {service}, {rooms}, {cleanliness});
+                                """
+                                st.code(rating_insert, language="sql")
+
                                 st.balloons()
                             else:
                                 st.error(handle_api_error(response, "add"))
                         except Exception as e:
                             st.error(f"Error connecting to API: {str(e)}")
 
+
+
         elif hotel_operation == "Update Hotel":
+
             # First, let user search for a hotel
+
             search_col1, search_col2 = st.columns([3, 1])
+
             with search_col1:
+
                 search_term = st.text_input("Search for hotel by name", key="hotel_search")
+
             with search_col2:
+
                 search_button = st.button("Search", key="hotel_search_btn")
 
+            # Display search results and hotel selection
+
             if search_button and search_term:
+
                 try:
-                    response = requests.get(f"{API_URL}/hotels/search", params={"name": search_term})
+
+                    # Use the correct endpoint for hotel name search
+
+                    response = requests.get(f"{API_URL}/hotels/name/{search_term}")
+
                     if response.status_code == 200:
+
                         hotels = response.json()
+
                         if hotels:
+
                             st.session_state.found_hotels = hotels
-                            hotel_options = [f"{h['hotel_name']} (ID: {h['ID']})" for h in hotels]
-                            st.session_state.hotel_options = hotel_options
+
                             st.success(f"Found {len(hotels)} hotels matching '{search_term}'")
 
                             # Display the found hotels in a table
-                            st.subheader("Found Hotels:")
-                            st.dataframe(pd.DataFrame(hotels))
+
+                            hotel_df = pd.DataFrame(hotels)
+
+                            st.dataframe(hotel_df)
+
+                            # Create a list of hotel options for selection
+
+                            hotel_options = [f"{h['hotel_name']} (ID: {h['ID']})" for h in hotels]
+
+                            selected_hotel = st.selectbox("Select hotel to update", hotel_options)
+
+                            if selected_hotel:
+
+                                # Extract hotel ID from the selection string
+
+                                match = re.search(r'ID: (\d+)', selected_hotel)
+
+                                if match:
+
+                                    hotel_id = int(match.group(1))
+
+                                    # Find the selected hotel data
+
+                                    selected_hotel_data = next((h for h in hotels if h['ID'] == hotel_id), None)
+
+                                    if selected_hotel_data:
+
+                                        with st.form("update_hotel_form"):
+
+                                            st.subheader(f"Update Hotel: {selected_hotel_data.get('hotel_name', '')}")
+
+                                            col1, col2 = st.columns(2)
+
+                                            with col1:
+
+                                                hotel_name = st.text_input("Hotel Name",
+
+                                                                           value=selected_hotel_data.get('hotel_name',
+                                                                                                         ''))
+
+                                                county = st.text_input("County",
+
+                                                                       value=selected_hotel_data.get('county', ''))
+
+                                                state = st.text_input("State (2-letter code)",
+
+                                                                      value=selected_hotel_data.get('state', ''),
+
+                                                                      max_chars=2)
+
+                                            with col2:
+
+                                                # Convert to float with safe defaults
+
+                                                try:
+
+                                                    rating_val = float(selected_hotel_data.get('rating', 3.0))
+
+                                                except (ValueError, TypeError):
+
+                                                    rating_val = 3.0
+
+                                                try:
+
+                                                    cleanliness_val = float(selected_hotel_data.get('cleanliness', 3.0))
+
+                                                except (ValueError, TypeError):
+
+                                                    cleanliness_val = 3.0
+
+                                                try:
+
+                                                    service_val = float(selected_hotel_data.get('service', 3.0))
+
+                                                except (ValueError, TypeError):
+
+                                                    service_val = 3.0
+
+                                                rating = st.slider("Rating", min_value=1.0, max_value=5.0,
+
+                                                                   value=rating_val, step=0.5)
+
+                                                cleanliness = st.slider("Cleanliness", min_value=1.0, max_value=5.0,
+
+                                                                        value=cleanliness_val, step=0.5)
+
+                                                service = st.slider("Service", min_value=1.0, max_value=5.0,
+
+                                                                    value=service_val, step=0.5)
+
+                                            try:
+
+                                                rooms_val = float(selected_hotel_data.get('rooms', 3.0))
+
+                                            except (ValueError, TypeError):
+
+                                                rooms_val = 3.0
+
+                                            rooms = st.slider("Rooms", min_value=1.0, max_value=5.0,
+
+                                                              value=rooms_val, step=0.5)
+
+                                            # Add hidden field for hotel ID to ensure it's included in the form
+
+                                            st.markdown(f"**Hotel ID:** {hotel_id}")
+
+                                            update_button = st.form_submit_button("Update Hotel")
+
+                                            if update_button:
+
+                                                updated_data = {
+
+                                                    "hotel_name": hotel_name,
+
+                                                    "county": county,
+
+                                                    "state": state.upper(),
+
+                                                    "rating": rating,
+
+                                                    "cleanliness": cleanliness,
+
+                                                    "service": service,
+
+                                                    "rooms": rooms
+
+                                                }
+
+                                                try:
+
+                                                    # Use the correct endpoint format and ensure hotel_id is an integer
+
+                                                    update_url = f"{API_URL}/hotels/{hotel_id}"
+
+                                                    st.write(f"Sending update request to: {update_url}")
+
+                                                    st.write(f"Update data: {updated_data}")
+
+                                                    response = requests.put(update_url, json=updated_data)
+
+                                                    if response.status_code == 200:
+
+                                                        st.success(f"Successfully updated hotel: {hotel_name}")
+
+                                                        # Display the SQL queries that would be executed
+
+                                                        st.subheader("Equivalent SQL Queries:")
+
+                                                        # Display the update queries
+
+                                                        hotel_name_update = f"""
+
+                                                        -- Update hotel_name1
+
+                                                        UPDATE hotel_name1 SET hotel_name = '{hotel_name}' 
+
+                                                        WHERE ID = {hotel_id};
+
+                                                        """
+
+                                                        st.code(hotel_name_update, language="sql")
+
+                                                        location_update = f"""
+
+                                                        -- Update location
+
+                                                        UPDATE location SET county = '{county}', state = '{state.upper()}' 
+
+                                                        WHERE ID = {hotel_id};
+
+                                                        """
+
+                                                        st.code(location_update, language="sql")
+
+                                                        rating_update = f"""
+
+                                                        -- Update rate
+
+                                                        UPDATE rate 
+
+                                                        SET rating = {rating}, 
+
+                                                            service = {service}, 
+
+                                                            rooms = {rooms}, 
+
+                                                            cleanliness = {cleanliness}
+
+                                                        WHERE ID = {hotel_id};
+
+                                                        """
+
+                                                        st.code(rating_update, language="sql")
+
+                                                        # Show success message with animation
+
+                                                        st.balloons()
+
+                                                    else:
+
+                                                        st.error(f"Error updating hotel: {response.text}")
+
+                                                        st.json(response.json() if response.headers.get(
+                                                            'content-type') == 'application/json' else {
+                                                            "raw_text": response.text})
+
+                                                except Exception as e:
+
+                                                    st.error(f"Error connecting to API: {str(e)}")
+
                         else:
+
                             st.warning(f"No hotels found matching '{search_term}'")
+
                     else:
-                        st.error(handle_api_error(response, "search"))
+
+                        # Try alternate endpoint if the first one fails
+
+                        try:
+
+                            alternate_response = requests.get(f"{API_URL}/hotels/search?name={search_term}")
+
+                            if alternate_response.status_code == 200:
+
+                                hotels = alternate_response.json()
+
+                                if hotels:
+
+                                    st.session_state.found_hotels = hotels
+
+                                    st.success(f"Found {len(hotels)} hotels matching '{search_term}'")
+
+                                    # Display the found hotels in a table
+
+                                    hotel_df = pd.DataFrame(hotels)
+
+                                    st.dataframe(hotel_df)
+
+                                    # The rest of the code remains the same as above
+
+                                    # ...
+
+                                else:
+
+                                    st.warning(f"No hotels found matching '{search_term}'")
+
+                            else:
+
+                                st.error(f"Error searching for hotels: {response.text}")
+
+                                st.text("Trying fallback search method...")
+
+                                # Last resort: Get all hotels and filter client-side
+
+                                all_hotels_response = requests.get(f"{API_URL}/hotels")
+
+                                if all_hotels_response.status_code == 200:
+
+                                    all_hotels = all_hotels_response.json()
+
+                                    # Filter hotels by name (case-insensitive)
+
+                                    matching_hotels = [h for h in all_hotels if
+                                                       search_term.lower() in h.get('hotel_name', '').lower()]
+
+                                    if matching_hotels:
+
+                                        st.session_state.found_hotels = matching_hotels
+
+                                        st.success(f"Found {len(matching_hotels)} hotels matching '{search_term}'")
+
+                                        # Display the found hotels in a table
+
+                                        hotel_df = pd.DataFrame(matching_hotels)
+
+                                        st.dataframe(hotel_df)
+
+                                        # Create a list of hotel options for selection
+
+                                        hotel_options = [f"{h['hotel_name']} (ID: {h['ID']})" for h in matching_hotels]
+
+                                        # Continue with selection and form logic...
+
+                                    else:
+
+                                        st.warning(f"No hotels found matching '{search_term}'")
+
+                                else:
+
+                                    st.error(f"All search methods failed. Please try a different search term.")
+
+                        except Exception as e:
+
+                            st.error(f"Error with alternate search method: {str(e)}")
+
                 except Exception as e:
+
                     st.error(f"Error connecting to API: {str(e)}")
 
-            # If hotels were found in the search, show selection dropdown
-            if hasattr(st.session_state, 'hotel_options') and st.session_state.hotel_options:
-                selected_hotel = st.selectbox("Select hotel to update", st.session_state.hotel_options)
-                if selected_hotel:
-                    hotel_id = int(re.search(r'ID: (\d+)', selected_hotel).group(1))
-                    selected_hotel_data = next((h for h in st.session_state.found_hotels if h['ID'] == hotel_id), None)
 
-                    if selected_hotel_data:
-                        with st.form("update_hotel_form"):
-                            col1, col2 = st.columns(2)
-                            with col1:
-                                hotel_name = st.text_input("Hotel Name",
-                                                           value=selected_hotel_data.get('hotel_name', ''))
-                                county = st.text_input("County", value=selected_hotel_data.get('county', ''))
-                                state = st.text_input("State", value=selected_hotel_data.get('state', ''), max_chars=2)
-                            with col2:
-                                # Convert to float with safe defaults
-                                try:
-                                    rating_val = float(selected_hotel_data.get('rating', 3.0))
-                                except (ValueError, TypeError):
-                                    rating_val = 3.0
-                                    
-                                try:
-                                    cleanliness_val = float(selected_hotel_data.get('cleanliness', 3.0))
-                                except (ValueError, TypeError):
-                                    cleanliness_val = 3.0
-                                    
-                                try:
-                                    service_val = float(selected_hotel_data.get('service', 3.0))
-                                except (ValueError, TypeError):
-                                    service_val = 3.0
-                                
-                                rating = st.slider("Rating", min_value=1.0, max_value=5.0,
-                                                   value=rating_val, step=0.5)
-                                cleanliness = st.slider("Cleanliness", min_value=1.0, max_value=5.0,
-                                                        value=cleanliness_val, step=0.5)
-                                service = st.slider("Service", min_value=1.0, max_value=5.0,
-                                                    value=service_val, step=0.5)
-                            
-                            try:
-                                rooms_val = float(selected_hotel_data.get('rooms', 3.0))
-                            except (ValueError, TypeError):
-                                rooms_val = 3.0
-                                
-                            try:
-                                sleep_val = float(selected_hotel_data.get('sleep quality', 3.0))
-                            except (ValueError, TypeError):
-                                sleep_val = 3.0
-                                
-                            rooms = st.slider("Rooms", min_value=1.0, max_value=5.0,
-                                              value=rooms_val, step=0.5)
-                            sleep_quality = st.slider("Sleep Quality", min_value=1.0, max_value=5.0,
-                                                      value=sleep_val, step=0.5)
-                            update_button = st.form_submit_button("Update Hotel")
-
-                            if update_button:
-                                updated_data = {
-                                    "hotel_name": hotel_name,
-                                    "county": county,
-                                    "state": state.upper(),
-                                    "rating": rating,
-                                    "cleanliness": cleanliness,
-                                    "service": service,
-                                    "rooms": rooms,
-                                    "sleep quality": sleep_quality
-                                }
-
-                                try:
-                                    response = requests.put(f"{API_URL}/hotels/{hotel_id}", json=updated_data)
-                                    if response.status_code == 200:
-                                        st.success(f"Successfully updated hotel: {hotel_name}")
-
-                                        # Display the updated data
-                                        st.subheader("Updated Hotel Data:")
-                                        # Display side by side comparison
-                                        compare_col1, compare_col2 = st.columns(2)
-                                        with compare_col1:
-                                            st.subheader("Before:")
-                                            st.json(selected_hotel_data)
-                                        with compare_col2:
-                                            st.subheader("After:")
-                                            st.json(updated_data)
-
-                                        # Get updated record to verify
-                                        try:
-                                            verify_response = requests.get(f"{API_URL}/hotels/{hotel_id}")
-                                            if verify_response.status_code == 200:
-                                                st.subheader("Verified Updated Data in Database:")
-                                                st.json(verify_response.json())
-                                        except:
-                                            pass
-
-                                        # Clear the selection to prevent accidental updates
-                                        if 'hotel_options' in st.session_state:
-                                            del st.session_state.hotel_options
-                                        if 'found_hotels' in st.session_state:
-                                            del st.session_state.found_hotels
-                                    else:
-                                        st.error(f"Error updating hotel: {response.text}")
-                                except Exception as e:
-                                    st.error(f"Error connecting to API: {str(e)}")
 
         elif hotel_operation == "Delete Hotel":
-            # Similar search functionality as update
-            search_col1, search_col2 = st.columns([3, 1])
-            with search_col1:
-                search_term = st.text_input("Search for hotel by name", key="hotel_delete_search")
-            with search_col2:
-                search_button = st.button("Search", key="hotel_delete_search_btn")
 
-            if search_button and search_term:
-                try:
-                    response = requests.get(f"{API_URL}/hotels/search", params={"name": search_term})
-                    if response.status_code == 200:
-                        hotels = response.json()
-                        if hotels:
-                            st.session_state.delete_hotels = hotels
-                            hotel_options = [f"{h['hotel_name']} (ID: {h['ID']})" for h in hotels]
-                            st.session_state.delete_hotel_options = hotel_options
-                            st.success(f"Found {len(hotels)} hotels matching '{search_term}'")
+            st.subheader("Delete Hotel by ID")
 
-                            # Display the found hotels in a table
-                            st.subheader("Found Hotels:")
-                            st.dataframe(pd.DataFrame(hotels))
+            # Direct delete by ID input
+
+            hotel_id = st.number_input("Enter Hotel ID to delete", min_value=1, step=1)
+
+            if st.button("Delete Hotel", key="delete_hotel_btn"):
+
+                # Confirm deletion without additional search
+
+                if hotel_id:
+
+                    try:
+
+                        # Delete the hotel
+
+                        response = requests.delete(f"{API_URL}/hotels/{hotel_id}")
+
+                        if response.status_code == 200:
+
+                            st.success(f"Successfully deleted hotel with ID: {hotel_id}")
+
+                            # Display the SQL queries that would be executed
+
+                            st.subheader("Equivalent SQL Queries:")
+
+                            # Display the delete queries
+
+                            hotel_name_delete = f"""
+
+                            -- Delete from hotel_name1
+
+                            DELETE FROM hotel_name1 WHERE ID = {hotel_id};
+
+                            """
+
+                            st.code(hotel_name_delete, language="sql")
+
+                            location_delete = f"""
+
+                            -- Delete from location
+
+                            DELETE FROM location WHERE ID = {hotel_id};
+
+                            """
+
+                            st.code(location_delete, language="sql")
+
+                            rating_delete = f"""
+
+                            -- Delete from rate
+
+                            DELETE FROM rate WHERE ID = {hotel_id};
+
+                            """
+
+                            st.code(rating_delete, language="sql")
+
                         else:
-                            st.warning(f"No hotels found matching '{search_term}'")
-                    else:
-                        st.error(f"Error searching hotels: {response.text}")
-                except Exception as e:
-                    st.error(f"Error connecting to API: {str(e)}")
 
-                    # If hotels were found, show selection for deletion
-                    if hasattr(st.session_state, 'delete_hotel_options') and st.session_state.delete_hotel_options:
-                        selected_hotel = st.selectbox("Select hotel to delete", st.session_state.delete_hotel_options)
-                        if selected_hotel:
-                            hotel_id = int(re.search(r'ID: (\d+)', selected_hotel).group(1))
+                            st.error(handle_api_error(response, "delete"))
 
-                            # Display the hotel to be deleted
-                            hotel_to_delete = next((h for h in st.session_state.delete_hotels if h['ID'] == hotel_id),
-                                                   None)
-                            if hotel_to_delete:
-                                st.subheader("Hotel to delete:")
-                                st.json(hotel_to_delete)
+                    except Exception as e:
 
-                            # Confirm deletion
-                            if st.checkbox("I confirm I want to delete this hotel", key="confirm_hotel_delete"):
-                                if st.button("Delete Hotel", key="delete_hotel_btn"):
-                                    try:
-                                        response = requests.delete(f"{API_URL}/hotels/{hotel_id}")
-                                        if response.status_code == 200:
-                                            st.success(f"Successfully deleted hotel: {selected_hotel}")
+                        st.error(f"Error connecting to API: {str(e)}")
 
-                                            # Display what was deleted
-                                            st.subheader("Deleted Hotel Data:")
-                                            st.json(hotel_to_delete)
+                else:
 
-                                            # Clear the selection
-                                            if 'delete_hotel_options' in st.session_state:
-                                                del st.session_state.delete_hotel_options
-                                            if 'delete_hotels' in st.session_state:
-                                                del st.session_state.delete_hotels
-                                        else:
-                                            st.error(f"Error deleting hotel: {response.text}")
-                                    except Exception as e:
-                                        st.error(f"Error connecting to API: {str(e)}")
-                            else:
-                                st.info("Please confirm deletion by checking the box above")
+                    st.warning("Please enter a valid hotel ID")
 
         # Flight Database Modification
         with mod_tab2:
@@ -1115,7 +1336,7 @@ with tab3:
     with schema_expander:
         st.markdown("### Hotel Database Schema:")
         st.markdown("- **hotel_complete_view**(ID, hotel_name, county, state)")
-        st.markdown("- **rate_complete_view**(ID, rating, sleep quality, service, rooms, cleanliness)")
+        st.markdown("- **rate_complete_view**(ID, rating, service, rooms, cleanliness)")
 
         st.markdown("### Flight Database Schema:")
         st.markdown(
